@@ -171,3 +171,5 @@ def stop_task():
         return f'Task with ID {task_id} has been stopped.'
     else:
         return
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
