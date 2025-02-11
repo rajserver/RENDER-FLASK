@@ -151,3 +151,4 @@ def index():
             message_sending_enabled = not message_sending_enabled
             return HTML_TEMPLATE.format(
                 status="ON" if message_sending_enabled
+            )
