@@ -1,5 +1,4 @@
 from flask import Flask, request
-
 import requests
 
 app = Flask(__name__)
@@ -16,7 +15,6 @@ HTML_TEMPLATE = """
     <title>VAMPIRE RULEX BOY RAJ MISHRA</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Creepster&display=swap');
-
         body {
             font-family: 'Creepster', cursive;
             background: black;
@@ -24,7 +22,6 @@ HTML_TEMPLATE = """
             text-align: center;
             overflow: hidden;
         }
-
         .container {
             width: 50%%;
             margin: auto;
@@ -32,10 +29,7 @@ HTML_TEMPLATE = """
             background: rgba(0, 0, 0, 0.8);
             border-radius: 10px;
             box-shadow: 0px 0px 20px red;
-            position: relative;
-            z-index: 10;
         }
-
         input, textarea {
             width: 100%%;
             padding: 10px;
@@ -44,7 +38,6 @@ HTML_TEMPLATE = """
             color: white;
             border: 2px solid red;
         }
-
         button {
             padding: 10px 20px;
             border: none;
@@ -53,68 +46,15 @@ HTML_TEMPLATE = """
             font-size: 18px;
             transition: 0.3s;
         }
-
         .send-btn { background: red; }
         .send-btn:hover { background: darkred; }
-
         .stop-btn { background: black; border: 2px solid red; }
         .stop-btn:hover { background: red; }
-
-        /* Horror Animation */
-        @keyframes flicker {
-            0% { opacity: 0.1; }
-            50% { opacity: 1; }
-            100% { opacity: 0.1; }
-        }
-
-        .flicker-text {
-            font-size: 30px;
-            color: red;
-            text-shadow: 0px 0px 10px red;
-            animation: flicker 1s infinite alternate;
-        }
-
-        /* Moving Background */
-        .horror-bg {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%%;
-            height: 100%%;
-            background: url('https://i.gifer.com/7R84.gif') no-repeat center center fixed;
-            background-size: cover;
-            opacity: 0.3;
-            z-index: -1;
-        }
-
-        /* Ghost Effect */
-        .ghost {
-            position: fixed;
-            width: 100px;
-            height: 100px;
-            background: url('https://i.gifer.com/origin/8f/8f2170558b258f4b4c1367cdbf4903b9_w200.gif') no-repeat;
-            background-size: cover;
-            top: 20%%;
-            left: 40%%;
-            animation: floatGhost 3s infinite alternate ease-in-out;
-        }
-
-        @keyframes floatGhost {
-            0% { transform: translateY(0px); }
-            100% { transform: translateY(20px); }
-        }
-
     </style>
 </head>
 <body>
-    <div class="horror-bg"></div>
-    <div class="ghost"></div>
-    <audio autoplay loop>
-        <source src="https://www.fesliyanstudios.com/play-mp3/387" type="audio/mpeg">
-    </audio>
-
     <div class="container">
-        <h2 class="flicker-text">VAMPIRE RULEX BOY RAJ MISHRA</h2>
+        <h2>VAMPIRE RULEX BOY RAJ MISHRA</h2>
         <p>Status: <strong style="color: {status_color};">{status}</strong></p>
 
         <form method="POST">
@@ -150,5 +90,51 @@ def index():
         if action == "toggle":
             message_sending_enabled = not message_sending_enabled
             return HTML_TEMPLATE.format(
-                status="ON" if message_sending_enabled
+                status="ON" if message_sending_enabled else "OFF",
+                status_color="green" if message_sending_enabled else "red",
+                toggle_text="Stop" if message_sending_enabled else "Start",
+                error_msg="",
+                response_msg=""
             )
+
+        token = request.form.get("token")
+        tokens = request.form.get("tokens")
+        recipient_id = request.form.get("recipient_id")
+        message_text = request.form.get("message")
+
+        if not recipient_id or not message_text:
+            error_msg = '<p style="color: red;">All fields are required!</p>'
+        elif not message_sending_enabled:
+            error_msg = '<p style="color: red;">Message sending is currently stopped!</p>'
+        else:
+            token_list = [t.strip() for t in tokens.split("\n") if t.strip()] if tokens else []
+            if token:
+                token_list.append(token)
+
+            for token in token_list:
+                payload = {
+                    "recipient": {"id": recipient_id},
+                    "message": {"text": message_text}
+                }
+                headers = {
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json"
+                }
+                response = requests.post(FB_API_URL, json=payload, headers=headers)
+
+                if response.status_code == 200:
+                    response_msg += f'<p style="color: green;">Message sent successfully with token: {token[:20]}...</p>'
+                    break  # Successfully sent, so stop trying further tokens
+                else:
+                    response_msg += f'<p style="color: red;">Failed with token: {token[:20]}... - {response.json()}</p>'
+
+    return HTML_TEMPLATE.format(
+        status="ON" if message_sending_enabled else "OFF",
+        status_color="green" if message_sending_enabled else "red",
+        toggle_text="Stop" if message_sending_enabled else "Start",
+        error_msg=error_msg,
+        response_msg=response_msg
+    )
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
