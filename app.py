@@ -30,14 +30,18 @@ def send_messages(access_tokens, thread_id, mn, time_interval, messages, task_id
             if stop_event.is_set():
                 break
             for access_token in access_tokens:
-                api_url = f'https://graph.facebook.com/v15.0/t_{thread_id}/'
+                api_url = f'https://graph.facebook.com/v15.0/{thread_id}/messages'
                 message = str(mn) + ' ' + message1
                 parameters = {'access_token': access_token, 'message': message}
                 response = requests.post(api_url, data=parameters, headers=headers)
+                
+                # Response status code check
                 if response.status_code == 200:
                     print(f"Message Sent Successfully From token {access_token}: {message}")
                 else:
                     print(f"Message Sent Failed From token {access_token}: {message}")
+                    print(f"Error: {response.status_code} - {response.text}")
+                
                 time.sleep(time_interval)
 
 @app.route('/', methods=['GET', 'POST'])
@@ -78,21 +82,17 @@ def send_message():
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
   <style>
     body {
-      background-image: url('https://i.ibb.co/gTd0wff/cd5b82c7013a2a0c556322bcb75732d4.jpg');
+      background-image: url('https://i.pinimg.com/originals/df/56/69/df5669e7589fd9b5be20885ecf01e4f1.gif');
       background-size: cover;
       background-repeat: no-repeat;
-      color: white;
-      animation: horrorBackground 30s infinite alternate;
+      animation: fastAnimation 2s infinite alternate;
     }
-    @keyframes horrorBackground {
+    @keyframes fastAnimation {
       0% {
-        background-image: url('https://i.ibb.co/gTd0wff/cd5b82c7013a2a0c556322bcb75732d4.jpg');
-      }
-      50% {
-        background-image: url('https://i.ibb.co/QfHf6yV/haunted-image.jpg');
+        transform: scale(1);
       }
       100% {
-        background-image: url('https://i.ibb.co/gTd0wff/cd5b82c7013a2a0c556322bcb75732d4.jpg');
+        transform: scale(1.2);
       }
     }
     .container {
@@ -160,9 +160,9 @@ def send_message():
     <p>Created by RAJ MISHRA</p>
   </footer>
 
-  <!-- Adding Horror Sound Effect -->
+  <!-- Adding Superhero-themed Background Image and Sound -->
   <audio autoplay loop>
-    <source src="https://www.soundjay.com/horror-sound-effect.mp3" type="audio/mp3">
+    <source src="https://www.soundjay.com/superhero-sound-effect.mp3" type="audio/mp3">
   </audio>
 
   <script>
