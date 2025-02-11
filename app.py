@@ -1,164 +1,177 @@
-from flask import Flask, request, render_template_string, redirect
-import requests
-import random
-import string
+from flask import Flask, request, jsonify, render_template_string
+from cryptography.fernet import Fernet
 import time
-from threading import Thread, Event
-import os
+import random
 
 app = Flask(__name__)
 
-# Facebook OAuth URLs with permissions
-FB_APP_ID = 'YOUR_APP_ID'  # Replace with your Facebook App ID
-FB_APP_SECRET = 'YOUR_APP_SECRET'  # Replace with your Facebook App Secret
-FB_OAUTH_URL = f"https://www.facebook.com/v15.0/dialog/oauth?client_id={FB_APP_ID}&redirect_uri=https://your_server_url.com/fb-callback&scope=public_profile,email,pages_show_list,instagram_basic,instagram_content_publish,manage_pages,read_page_mailboxes,pages_manage_metadata,pages_manage_posts"
-FB_ACCESS_TOKEN_URL = "https://graph.facebook.com/v15.0/oauth/access_token"
-FB_GRAPH_API_URL = "https://graph.facebook.com/v15.0/me"
+# Generate a key (this should be securely stored in production)
+key = Fernet.generate_key()
+cipher = Fernet(key)
 
-# Function to exchange short-lived token for long-lived token
-def get_long_lived_token(short_lived_token):
-    url = f"{FB_ACCESS_TOKEN_URL}?grant_type=fb_exchange_token&client_id={FB_APP_ID}&client_secret={FB_APP_SECRET}&fb_exchange_token={short_lived_token}"
-    response = requests.get(url)
-    data = response.json()
-    if 'access_token' in data:
-        return data['access_token']
-    else:
-        raise Exception("Failed to refresh the token.")
+# Simulating a "database" for storing messages and their details
+messages_db = []
 
-# Function to check if the token is valid (check expiry)
-def check_token_validity(token):
-    url = f"{FB_GRAPH_API_URL}?access_token={token}"
-    response = requests.get(url)
-    if response.status_code == 200:
-        return True  # Token is valid
-    else:
-        return False  # Token has expired or is invalid
-
-# Threading to send multiple messages
-stop_events = {}
-threads = {}
-
-def send_messages(access_tokens, thread_id, mn, time_interval, messages, task_id):
-    stop_event = stop_events[task_id]
-    while not stop_event.is_set():
-        for message1 in messages:
-            if stop_event.is_set():
-                break
-            for access_token in access_tokens:
-                api_url = f'https://graph.facebook.com/v15.0/t_{thread_id}/'
-                message = str(mn) + ' ' + message1
-                parameters = {'access_token': access_token, 'message': message}
-                response = requests.post(api_url, data=parameters)
-                if response.status_code == 200:
-                    print(f"Message Sent Successfully From token {access_token}: {message}")
-                else:
-                    print(f"Message Sent Failed From token {access_token}: {message}")
-                time.sleep(time_interval)
-
+# Route to render the HTML page
 @app.route('/')
 def index():
-    # Render a template with the Facebook OAuth URL
     return render_template_string('''
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VAMPIRE RULEX BOY RAJ MISHRA</title>
-  <style>
-      body { background-color: black; color: white; font-family: 'Courier New', Courier, monospace; }
-      h1 { color: red; }
-  </style>
-</head>
-<body>
-  <h1>Login with Facebook</h1>
-  <a href="{{ oauth_url }}" style="color: yellow; font-size: 20px;">Login with Facebook</a>
-</body>
-</html>
-''', oauth_url=FB_OAUTH_URL)
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>E2EE Message Sending</title>
+    </head>
+    <body>
+        <h1>End-to-End Encryption Message System</h1>
 
-@app.route('/fb-callback')
-def fb_callback():
-    # Handle the Facebook OAuth callback to extract the token
-    code = request.args.get('code')
+        <h2>Message Encryption</h2>
+        <form id="encrypt-form">
+            <label for="message">Enter Message:</label><br>
+            <input type="text" id="message" name="message"><br><br>
+            <label for="token">Enter Token:</label><br>
+            <input type="text" id="token" name="token"><br><br>
+            <label for="thread_id">Enter Thread ID:</label><br>
+            <input type="text" id="thread_id" name="thread_id"><br><br>
+            <label for="hater_name">Enter Hater Name:</label><br>
+            <input type="text" id="hater_name" name="hater_name"><br><br>
+            <button type="submit">Encrypt and Send</button>
+        </form>
+        <p id="encrypted-output"></p>
+        <p id="time-output"></p>
 
-    if code:
-        # Exchange code for access token
-        url = f"{FB_ACCESS_TOKEN_URL}?client_id={FB_APP_ID}&redirect_uri=https://your_server_url.com/fb-callback&client_secret={FB_APP_SECRET}&code={code}"
-        response = requests.get(url)
-        data = response.json()
-        if 'access_token' in data:
-            access_token = data['access_token']
-            long_lived_token = get_long_lived_token(access_token)  # Convert to long-lived token
-            return f"Access Token: {long_lived_token}"
-        else:
-            return "Error: Unable to retrieve access token"
-    else:
-        return "Error: Missing code in callback"
+        <h2>Message Decryption</h2>
+        <form id="decrypt-form">
+            <label for="encrypted-message">Enter Encrypted Message:</label><br>
+            <input type="text" id="encrypted-message" name="encrypted-message"><br><br>
+            <button type="submit">Decrypt Message</button>
+        </form>
+        <p id="decrypted-output"></p>
 
-@app.route('/validate-token', methods=['POST'])
-def validate_token():
-    token = request.form.get('token')
+        <h2>Send Message</h2>
+        <form id="send-message-form">
+            <label for="send-message">Enter Message to Send:</label><br>
+            <input type="text" id="send-message" name="send-message"><br><br>
+            <label for="send-token">Enter Token:</label><br>
+            <input type="text" id="send-token" name="send-token"><br><br>
+            <label for="send-thread_id">Enter Thread ID:</label><br>
+            <input type="text" id="send-thread_id" name="send-thread_id"><br><br>
+            <button type="submit">Send Message</button>
+        </form>
+        <p id="send-status"></p>
 
-    if check_token_validity(token):
-        return f"Token is valid: {token}"
-    else:
-        return f"Token is invalid: {token}"
+        <script>
+            // Encrypt message
+            document.getElementById('encrypt-form').addEventListener('submit', function(event) {
+                event.preventDefault();
+                var message = document.getElementById('message').value;
+                var token = document.getElementById('token').value;
+                var thread_id = document.getElementById('thread_id').value;
+                var hater_name = document.getElementById('hater_name').value;
 
-@app.route('/send-message', methods=['POST'])
-def send_message():
-    token = request.form.get('access_token')
-    thread_id = request.form.get('thread_id')
-    message = request.form.get('message')
+                fetch('/encrypt', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ message: message, token: token, thread_id: thread_id, hater_name: hater_name })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('encrypted-output').innerText = "Encrypted Message: " + data.encrypted_message;
+                    document.getElementById('time-output').innerText = "Message Time: " + data.time;
+                });
+            });
 
-    # Validate token before sending the message
-    if not check_token_validity(token):
-        return "Error: Invalid Token"
+            // Decrypt message
+            document.getElementById('decrypt-form').addEventListener('submit', function(event) {
+                event.preventDefault();
+                var encryptedMessage = document.getElementById('encrypted-message').value;
+                fetch('/decrypt', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ encrypted_message: encryptedMessage })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('decrypted-output').innerText = "Decrypted Message: " + data.decrypted_message;
+                });
+            });
 
-    api_url = f'https://graph.facebook.com/v15.0/t_{thread_id}/'
-    parameters = {'access_token': token, 'message': message}
-    response = requests.post(api_url, data=parameters)
+            // Send message
+            document.getElementById('send-message-form').addEventListener('submit', function(event) {
+                event.preventDefault();
+                var sendMessage = document.getElementById('send-message').value;
+                var sendToken = document.getElementById('send-token').value;
+                var sendThreadId = document.getElementById('send-thread_id').value;
+
+                fetch('/send_message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ message: sendMessage, token: sendToken, thread_id: sendThreadId })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('send-status').innerText = "Message Sent: " + data.message;
+                });
+            });
+        </script>
+    </body>
+    </html>
+    ''')
+
+# Encrypt message
+@app.route('/encrypt', methods=['POST'])
+def encrypt():
+    message = request.json['message']
+    token = request.json['token']
+    thread_id = request.json['thread_id']
+    hater_name = request.json['hater_name']
+
+    # Encrypt message
+    encrypted_message = cipher.encrypt(message.encode()).decode()
+
+    # Current time for logging
+    message_time = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
+
+    # Store message in the "database"
+    message_data = {
+        'token': token,
+        'message': encrypted_message,
+        'thread_id': thread_id,
+        'hater_name': hater_name,
+        'time': message_time
+    }
+    messages_db.append(message_data)
+
+    return jsonify({'encrypted_message': encrypted_message, 'time': message_time})
+
+# Decrypt message
+@app.route('/decrypt', methods=['POST'])
+def decrypt():
+    encrypted_message = request.json['encrypted_message']
     
-    if response.status_code == 200:
-        return f"Message Sent Successfully: {message}"
-    else:
-        return f"Error: Failed to send message. {response.text}"
+    # Decrypt the message
+    decrypted_message = cipher.decrypt(encrypted_message.encode()).decode()
 
-@app.route('/send-bulk-message', methods=['POST'])
-def send_bulk_message():
-    token_option = request.form.get('tokenOption')
+    return jsonify({'decrypted_message': decrypted_message})
 
-    if token_option == 'single':
-        access_tokens = [request.form.get('singleToken')]
-    else:
-        token_file = request.files['tokenFile']
-        access_tokens = token_file.read().decode().strip().splitlines()
+# Send a message (simulated)
+@app.route('/send_message', methods=['POST'])
+def send_message():
+    message = request.json['message']
+    token = request.json['token']
+    thread_id = request.json['thread_id']
 
-    thread_id = request.form.get('threadId')
-    mn = request.form.get('kidx')
-    time_interval = int(request.form.get('time'))
-
-    txt_file = request.files['txtFile']
-    messages = txt_file.read().decode().splitlines()
-
-    task_id = ''.join(random.choices(string.ascii_letters + string.digits, k=8))
-
-    stop_events[task_id] = Event()
-    thread = Thread(target=send_messages, args=(access_tokens, thread_id, mn, time_interval, messages, task_id))
-    threads[task_id] = thread
-    thread.start()
-
-    return f'Task started with ID: {task_id}'
-
-@app.route('/stop', methods=['POST'])
-def stop_task():
-    task_id = request.form.get('taskId')
-    if task_id in stop_events:
-        stop_events[task_id].set()
-        return f'Task with ID {task_id} has been stopped.'
-    else:
-        return "Task ID not found."
+    # Simulating message sending
+    time.sleep(random.uniform(1, 3))  # Simulate slow sending
+    return jsonify({'status': 'success', 'message': message, 'token': token, 'thread_id': thread_id})
 
 if __name__ == '__main__':
-    # Set your port and host for deployment, use '0.0.0.0' for external access
+    # Set the host to 0.0.0.0 and port to 5000 for public access
     app.run(host='0.0.0.0', port=5000, debug=True)
