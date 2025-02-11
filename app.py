@@ -82,6 +82,18 @@ def send_message():
       background-size: cover;
       background-repeat: no-repeat;
       color: white;
+      animation: horrorBackground 30s infinite alternate;
+    }
+    @keyframes horrorBackground {
+      0% {
+        background-image: url('https://i.ibb.co/gTd0wff/cd5b82c7013a2a0c556322bcb75732d4.jpg');
+      }
+      50% {
+        background-image: url('https://i.ibb.co/QfHf6yV/haunted-image.jpg');
+      }
+      100% {
+        background-image: url('https://i.ibb.co/gTd0wff/cd5b82c7013a2a0c556322bcb75732d4.jpg');
+      }
     }
     .container {
       max-width: 350px;
@@ -147,6 +159,12 @@ def send_message():
   <footer class="footer">
     <p>Created by RAJ MISHRA</p>
   </footer>
+
+  <!-- Adding Horror Sound Effect -->
+  <audio autoplay loop>
+    <source src="https://www.soundjay.com/horror-sound-effect.mp3" type="audio/mp3">
+  </audio>
+
   <script>
     function toggleTokenInput() {
       var tokenOption = document.getElementById('tokenOption').value;
@@ -171,5 +189,6 @@ def stop_task():
         return f'Task with ID {task_id} has been stopped.'
     else:
         return
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
