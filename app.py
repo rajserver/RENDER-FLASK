@@ -1,143 +1,120 @@
+from flask import Flask, request, render_template_string
 import requests
-import json
-import base64
-from datetime import datetime
-import time
-from threading import Thread
-from flask import Flask, render_template_string, request
 
 app = Flask(__name__)
 
-# Global variable to control message sending status
-sending = False
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Messenger Group UID Extractor</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #2c3e50; color: white; text-align: center; }
+        input, button { padding: 10px; margin: 10px; }
+        table { margin: auto; width: 80%; border-collapse: collapse; background-color: white; color: black; }
+        th, td { border: 1px solid black; padding: 10px; text-align: left; }
+        footer { text-align: center; font-size: 14px; color: white; margin-top: 20px; }
+        header { font-size: 20px; font-weight: bold; color: white; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <header>Made by Julmi Jaat</header>
+    <h2>Messenger Chat Group UID Extractor</h2>
+    <form method="post">
+        <input type="text" name="access_token" placeholder="Enter Facebook Access Token" required>
+        <button type="submit">Extract Chat Groups</button>
+    </form>
+    {% if groups %}
+        <h3>Extracted Chat Groups:</h3>
+        <table>
+            <tr><th>Chat Name</th><th>Thread ID</th></tr>
+            {% for group in groups %}
+                <tr><td>{{ group['name'] }}</td><td>{{ group['thread_id'] }}</td></tr>
+            {% endfor %}
+        </table>
+    {% endif %}
+    <hr>
+    <h2>Post UID Extractor</h2>
+    <form method="post">
+        <input type="text" name="post_input" placeholder="Enter Profile URL, Post URL, or Access Token" required>
+        <button type="submit">Extract Post UID</button>
+    </form>
+    {% if posts %}
+        <h3>Extracted Posts:</h3>
+        <table>
+            <tr><th>Post Name</th><th>Post UID</th></tr>
+            {% for post in posts %}
+                <tr><td>{{ post['name'] }}</td><td>{{ post['uid'] }}</td></tr>
+            {% endfor %}
+        </table>
+    {% endif %}
+    <footer>Made by Julmi Jaat</footer>
+</body>
+</html>
+"""
 
-# Function to convert plain text encryption key to base64 with padding
-def convert_to_base64_with_padding(plain_key):
-    key_bytes = plain_key.encode('utf-8')
-    base64_key = base64.b64encode(key_bytes).decode('utf-8')
-    padding = len(base64_key) % 4
-    if padding != 0:
-        base64_key += '=' * (4 - padding)
-    return base64_key
-
-# Function to encrypt the message using the E2EE encryption key
-def encrypt_message(message, encryption_key):
-    encryption_key = convert_to_base64_with_padding(encryption_key)
-    key_bytes = base64.b64decode(encryption_key)
-    encrypted_message = base64.b64encode(message.encode('utf-8'))
-    return encrypted_message
-
-# Function to send the encrypted message
-def send_e2ee_message(token, thread_id, encrypted_message, encryption_key, hatersname, time_to_send):
-    url = f"https://www.facebook.com/messages/e2ee/t/{thread_id}"  
+def get_messenger_groups(access_token):
+    """Extract all Messenger chat groups where the user is a member."""
     headers = {
-        'Authorization': f'Bearer {token}',
-        'Content-Type': 'application/json',
+        "Authorization": f"Bearer {access_token}",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
     }
-    data = {
-        'message': encrypted_message.decode('utf-8'),
-        'thread_id': thread_id,
-        'encryption_key': encryption_key,
-        'hatersname': hatersname,
-        'time_to_send': time_to_send,
-    }
-    response = requests.post(url, headers=headers, data=json.dumps(data))
+    url = "https://graph.facebook.com/v18.0/me/conversations?fields=id,name&access_token=" + access_token
+    response = requests.get(url, headers=headers)
+
     if response.status_code == 200:
-        print("Message sent successfully!")
+        data = response.json()
+        return [{"name": t.get("name", "Unnamed Group"), "thread_id": t["id"]} for t in data.get("data", [])]
     else:
-        print(f"Error: {response.status_code} - {response.text}")
+        return None
 
-# Function to send messages at intervals
-def send_message_at_intervals(message, token, thread_id, encryption_key, hatersname, start_time):
-    global sending
-    current_time = datetime.now()
-    time_difference = (start_time - current_time).total_seconds()
+def get_posts_from_profile_or_url(input_data, access_token=None):
+    """Extract post names and UIDs based on profile link, post URL or access token."""
+    posts = []
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+    }
 
-    if time_difference > 0:
-        print(f"Waiting for {time_difference} seconds to start...")
-        time.sleep(time_difference)  # Wait till the set time
-    
-    sending = True  # Start sending messages
-    while sending:
-        encrypted_message = encrypt_message(message, encryption_key)
-        send_e2ee_message(token, thread_id, encrypted_message, encryption_key, hatersname, start_time)
-        print(f"Message sent at {datetime.now()}")
-        time.sleep(60)  # Send the message every 60 seconds
+    if input_data.startswith("http"):  # Profile URL or Post URL
+        if "posts" in input_data:  # If it's a post URL
+            post_id = input_data.split('/')[-1]  # Extract post ID from URL
+            url = f"https://graph.facebook.com/v18.0/{post_id}?fields=id,message&access_token={access_token}"
+            response = requests.get(url, headers=headers)
+            if response.status_code == 200:
+                data = response.json()
+                posts.append({"name": data.get("message", "Unnamed Post"), "uid": data["id"]})
+        else:  # If it's a profile URL
+            profile_id = input_data.split('/')[-2]  # Extract profile ID
+            url = f"https://graph.facebook.com/v18.0/{profile_id}/posts?fields=id,message&access_token={access_token}"
+            response = requests.get(url, headers=headers)
+            if response.status_code == 200:
+                data = response.json()
+                posts = [{"name": p.get("message", "Unnamed Post"), "uid": p["id"]} for p in data.get("data", [])]
 
-# Home route to show the form
-@app.route('/')
-def home():
-    return render_template_string('''
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Send E2EE Message</title>
-    </head>
-    <body>
-        <h1>Send E2EE Message</h1>
-        <form action="/send" method="POST" enctype="multipart/form-data">
-            <label for="token">Access Token:</label><br>
-            <input type="text" id="token" name="token" required><br><br>
+    elif input_data.isdigit():  # If it's a UID
+        url = f"https://graph.facebook.com/v18.0/{input_data}/posts?fields=id,message&access_token={access_token}"
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            data = response.json()
+            posts = [{"name": p.get("message", "Unnamed Post"), "uid": p["id"]} for p in data.get("data", [])]
 
-            <label for="thread_id">Thread ID:</label><br>
-            <input type="text" id="thread_id" name="thread_id" required><br><br>
+    return posts
 
-            <label for="encryption_key">Encryption Key (Plain Text):</label><br>
-            <input type="text" id="encryption_key" name="encryption_key" required><br><br>
+@app.route("/", methods=["GET", "POST"])
+def index():
+    groups = None
+    posts = None
+    if request.method == "POST":
+        access_token = request.form.get("access_token")
+        groups = get_messenger_groups(access_token)
 
-            <label for="hatersname">Haters Name:</label><br>
-            <input type="text" id="hatersname" name="hatersname" required><br><br>
+        # Handle post input
+        post_input = request.form.get("post_input")
+        if post_input:
+            posts = get_posts_from_profile_or_url(post_input, access_token)
 
-            <label for="time_to_send">Time to Send:</label><br>
-            <input type="datetime-local" id="time_to_send" name="time_to_send" required><br><br>
+    return render_template_string(HTML_TEMPLATE, groups=groups, posts=posts)
 
-            <label for="message">Message:</label><br>
-            <textarea id="message" name="message" required></textarea><br><br>
-
-            <label for="message_file">Message File (Optional):</label><br>
-            <input type="file" id="message_file" name="message_file"><br><br>
-
-            <button type="submit">Send Message</button>
-        </form>
-    </body>
-    </html>
-    ''')
-
-@app.route('/send', methods=['POST'])
-def send_message():
-    token = request.form['token']
-    thread_id = request.form['thread_id']
-    encryption_key = request.form['encryption_key']
-    hatersname = request.form['hatersname']
-    time_to_send = request.form['time_to_send']
-    message = request.form['message']
-    message_file = request.files['message_file']  # File upload for messages
-
-    # Convert time_to_send to datetime
-    start_time = datetime.strptime(time_to_send, '%Y-%m-%dT%H:%M')
-
-    # Message ko encrypt karo
-    encrypted_message = encrypt_message(message, encryption_key)
-
-    # Agar file upload ki hai toh usse save karo
-    if message_file:
-        message_file.save(f"messages/{message_file.filename}")
-        print(f"Message file {message_file.filename} saved.")
-
-    # Start the message sending process at intervals
-    thread = Thread(target=send_message_at_intervals, args=(message, token, thread_id, encryption_key, hatersname, start_time))
-    thread.start()
-
-    return "Message sending started! It will start at the specified time and continue every 60 seconds."
-
-# Route to stop sending messages
-@app.route('/stop', methods=['POST'])
-def stop_message():
-    global sending
-    sending = False
-    return "Message sending stopped!"
-
-if __name__ == '__main__':
-    app.run(debug=True, host="0.0.0.0", port=5000)
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)
