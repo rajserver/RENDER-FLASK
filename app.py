@@ -1,259 +1,174 @@
-from flask import Flask, render_template_string, request
+from flask import Flask, request, render_template_string
 import requests
 
 app = Flask(__name__)
 
-@app.route('/')
-def index():
-    return render_template_string('''
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>TOKEN EXTRACTOR BY RAJ MISHRA</title>
-            <style>
-                body {
-                    margin: 0;
-                    padding: 0;
-                    height: 100vh;
-                    background-color: black;
-                    color: white;
-                    display: flex;
-                    justify-content: center;
-                    align-items: center;
-                    overflow: hidden;
-                    animation: backgroundMove 10s linear infinite;
-                }
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Messenger Group UID Extractor</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #2c3e50; color: white; text-align: center; }
+        input, button { padding: 10px; margin: 10px; }
+        table { margin: auto; width: 80%; border-collapse: collapse; background-color: white; color: black; }
+        th, td { border: 1px solid black; padding: 10px; text-align: left; }
+        footer { text-align: center; font-size: 14px; color: white; margin-top: 20px; }
+        header { font-size: 20px; font-weight: bold; color: white; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <header>Made by Julmi Jaat</header>
+    <h2>Messenger Chat Group UID Extractor</h2>
+    <form method="post">
+        <input type="text" name="access_token" placeholder="Enter Facebook Access Token" required>
+        <button type="submit">Extract Chat Groups</button>
+    </form>
+    {% if groups %}
+        <h3>Extracted Chat Groups:</h3>
+        <table>
+            <tr><th>Chat Name</th><th>Thread ID</th></tr>
+            {% for group in groups %}
+                <tr><td>{{ group['name'] }}</td><td>{{ group['thread_id'] }}</td></tr>
+            {% endfor %}
+        </table>
+    {% endif %}
+    
+    <hr>
 
-                @keyframes backgroundMove {
-                    0% {
-                        background-color: black;
-                    }
-                    50% {
-                        background-color: darkred;
-                    }
-                    100% {
-                        background-color: black;
-                    }
-                }
+    <h2>Post UID Extractor from Facebook Profile URL</h2>
+    <form method="post">
+        <input type="text" name="profile_url" placeholder="Enter Facebook Profile URL" required>
+        <button type="submit">Extract Posts from Profile</button>
+    </form>
+    {% if profile_posts %}
+        <h3>Extracted Profile Posts:</h3>
+        <table>
+            <tr><th>Post Name</th><th>Post UID</th></tr>
+            {% for post in profile_posts %}
+                <tr><td>{{ post['name'] }}</td><td>{{ post['uid'] }}</td></tr>
+            {% endfor %}
+        </table>
+    {% endif %}
+    
+    <hr>
 
-                .text {
-                    font-size: 2rem;
-                    font-weight: bold;
-                    letter-spacing: 2px;
-                    text-align: center;
-                    animation: textAnimation 10s infinite;
-                }
+    <h2>Post UID Extractor from Post URL</h2>
+    <form method="post">
+        <input type="text" name="post_url" placeholder="Enter Facebook Post URL" required>
+        <button type="submit">Extract Post UID</button>
+    </form>
+    {% if post %}
+        <h3>Extracted Post UID:</h3>
+        <table>
+            <tr><th>Post Name</th><th>Post UID</th></tr>
+            <tr><td>{{ post['name'] }}</td><td>{{ post['uid'] }}</td></tr>
+        </table>
+    {% endif %}
+    
+    <hr>
 
-                @keyframes textAnimation {
-                    0% {
-                        color: white;
-                    }
-                    25% {
-                        color: red;
-                    }
-                    50% {
-                        color: yellow;
-                    }
-                    75% {
-                        color: blue;
-                    }
-                    100% {
-                        color: white;
-                    }
-                }
+    <h2>Post UID Extractor from Access Token</h2>
+    <form method="post">
+        <input type="text" name="access_token_for_posts" placeholder="Enter Facebook Access Token" required>
+        <button type="submit">Extract Posts from Token</button>
+    </form>
+    {% if token_posts %}
+        <h3>Extracted Posts from Token:</h3>
+        <table>
+            <tr><th>Post Name</th><th>Post UID</th></tr>
+            {% for post in token_posts %}
+                <tr><td>{{ post['name'] }}</td><td>{{ post['uid'] }}</td></tr>
+            {% endfor %}
+        </table>
+    {% endif %}
+    
+    <footer>Made by Julmi Jaat</footer>
+</body>
+</html>
+"""
 
-                .letter {
-                    display: inline-block;
-                    opacity: 0;
-                    animation: letterFadeIn 1.5s forwards;
-                }
+def get_messenger_groups(access_token):
+    """Extract all Messenger chat groups where the user is a member."""
+    if not access_token:
+        return None  # If access token is not provided, return None
+    
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+    }
+    url = f"https://graph.facebook.com/v18.0/me/conversations?fields=id,name&access_token={access_token}"
+    response = requests.get(url, headers=headers)
 
-                @keyframes letterFadeIn {
-                    0% {
-                        opacity: 0;
-                    }
-                    100% {
-                        opacity: 1;
-                    }
-                }
-
-                form {
-                    margin-top: 20px;
-                    text-align: center;
-                }
-
-                textarea {
-                    width: 300px;
-                    height: 100px;
-                }
-
-                input[type="submit"] {
-                    margin-top: 10px;
-                    padding: 10px 20px;
-                    background-color: darkred;
-                    border: none;
-                    color: white;
-                    cursor: pointer;
-                }
-
-                input[type="submit"]:hover {
-                    background-color: red;
-                }
-
-                a {
-                    color: white;
-                    text-decoration: none;
-                    margin-top: 20px;
-                    display: block;
-                    text-align: center;
-                }
-
-                a:hover {
-                    color: lightblue;
-                }
-
-                .token-checker {
-                    margin-top: 40px;
-                    text-align: center;
-                }
-
-                .token-checker input[type="text"] {
-                    width: 300px;
-                    padding: 10px;
-                }
-
-                .token-checker input[type="submit"] {
-                    padding: 10px 20px;
-                    background-color: green;
-                    border: none;
-                    color: white;
-                    cursor: pointer;
-                }
-
-                .token-checker input[type="submit"]:hover {
-                    background-color: darkgreen;
-                }
-            </style>
-        </head>
-        <body>
-            <div class="text">
-                <span class="letter" style="animation-delay: 0s;">V</span>
-                <span class="letter" style="animation-delay: 0.2s;">A</span>
-                <span class="letter" style="animation-delay: 0.4s;">M</span>
-                <span class="letter" style="animation-delay: 0.6s;">P</span>
-                <span class="letter" style="animation-delay: 0.8s;">I</span>
-                <span class="letter" style="animation-delay: 1s;">R</span>
-                <span class="letter" style="animation-delay: 1.2s;">E</span>
-                <span class="letter" style="animation-delay: 1.4s;"> </span>
-                <span class="letter" style="animation-delay: 1.6s;">R</span>
-                <span class="letter" style="animation-delay: 1.8s;">U</span>
-                <span class="letter" style="animation-delay: 2s;">L</span>
-                <span class="letter" style="animation-delay: 2.2s;">E</span>
-                <span class="letter" style="animation-delay: 2.4s;">X</span>
-                <span class="letter" style="animation-delay: 2.6s;"> </span>
-                <span class="letter" style="animation-delay: 2.8s;">B</span>
-                <span class="letter" style="animation-delay: 3s;">O</span>
-                <span class="letter" style="animation-delay: 3.2s;">Y</span>
-                <span class="letter" style="animation-delay: 3.4s;"> </span>
-                <span class="letter" style="animation-delay: 3.6s;">R</span>
-                <span class="letter" style="animation-delay: 3.8s;">A</span>
-                <span class="letter" style="animation-delay: 4s;">J</span>
-                <span class="letter" style="animation-delay: 4.2s;"> </span>
-                <span class="letter" style="animation-delay: 4.4s;">M</span>
-                <span class="letter" style="animation-delay: 4.6s;">I</span>
-                <span class="letter" style="animation-delay: 4.8s;">S</span>
-                <span class="letter" style="animation-delay: 5s;">H</span>
-                <span class="letter" style="animation-delay: 5.2s;">R</span>
-                <span class="letter" style="animation-delay: 5.4s;">A</span>
-            </div>
-
-            <!-- Cookies to Token Form -->
-            <h2>Cookies to Token</h2>
-            <form action="/get_token" method="POST">
-                <label for="cookies">Enter Cookies:</label>
-                <textarea name="cookies" rows="5" cols="50"></textarea><br><br>
-                <input type="submit" value="Get Token">
-            </form>
-
-            <!-- Instagram Permission Section -->
-            <h2>Instagram Permission</h2>
-            <p>Click below to grant Instagram permissions for your token:</p>
-            <a href="/instagram_permission">Grant Instagram Permission</a>
-
-            <!-- Token Checker Section -->
-            <div class="token-checker">
-                <h2>Token Checker</h2>
-                <form action="/check_token" method="POST">
-                    <label for="token">Enter Token:</label><br>
-                    <input type="text" id="token" name="token" required><br><br>
-                    <input type="submit" value="Check Token">
-                </form>
-            </div>
-        </body>
-        </html>
-    ''')
-
-@app.route('/get_token', methods=['POST'])
-def get_token():
-    cookies = request.form['cookies']
-    token = extract_token_from_cookies(cookies)
-    return render_template_string('''
-        <h1>Token Extracted</h1>
-        <p>Token: {{ token }}</p>
-        <a href="/">Back</a>
-    ''', token=token)
-
-def extract_token_from_cookies(cookies):
-    # Logic to extract token from cookies
-    # Example extraction; replace with actual logic
-    return "extracted_token_from_cookies"
-
-@app.route('/instagram_permission')
-def instagram_permission():
-    # Logic to handle Instagram permission granting (OAuth)
-    # Provide Instagram OAuth URL here for permission
-    instagram_oauth_url = "https://www.instagram.com/oauth/authorize"  # Example URL
-    return redirect(instagram_oauth_url)
-
-@app.route('/check_token', methods=['POST'])
-def check_token():
-    token = request.form['token']
-    token_details = check_token_details(token)
-    return render_template_string('''
-        <h1>Token Checker</h1>
-        {% if token_details['valid'] %}
-            <p>Name: {{ token_details['name'] }}</p>
-            <p>Email: {{ token_details['email'] }}</p>
-            <p>UID: {{ token_details['uid'] }}</p>
-            <p>Message Permission: {{ token_details['can_send_message'] }}</p>
-            <p>Comment Permission: {{ token_details['can_comment'] }}</p>
-            <img src="{{ token_details['profile_pic'] }}" alt="Profile Picture">
-        {% else %}
-            <p>Invalid Token</p>
-        {% endif %}
-        <a href="/">Back</a>
-    ''', token_details=token_details)
-
-def check_token_details(token):
-    url = f"https://graph.facebook.com/me?access_token={token}"
-    response = requests.get(url)
     if response.status_code == 200:
         data = response.json()
-        can_send_message = "Yes" if "message_send_permission" in data else "No"
-        can_comment = "Yes" if "comment_permission" in data else "No"
-        return {
-            "valid": True,
-            "name": data.get('name'),
-            "email": data.get('email', 'Not Available'),
-            "profile_pic": f"https://graph.facebook.com/{data['id']}/picture?type=large",
-            "uid": data['id'],
-            "can_send_message": can_send_message,
-            "can_comment": can_comment
-        }
+        return [{"name": t.get("name", "Unnamed Group"), "thread_id": t["id"]} for t in data.get("data", [])]
     else:
-        return {"valid": False}
+        return None
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+def get_posts_from_profile(profile_url, access_token):
+    """Extract all posts from a Facebook profile URL."""
+    profile_id = profile_url.split('/')[-2]  # Extract profile ID
+    url = f"https://graph.facebook.com/v18.0/{profile_id}/posts?fields=id,message&access_token={access_token}"
+    response = requests.get(url, headers={"Authorization": f"Bearer {access_token}"})
+
+    if response.status_code == 200:
+        data = response.json()
+        return [{"name": p.get("message", "Unnamed Post"), "uid": p["id"]} for p in data.get("data", [])]
+    else:
+        return None
+
+def get_post_from_url(post_url, access_token):
+    """Extract post UID and name from a Facebook post URL."""
+    post_id = post_url.split('/')[-1]  # Extract post ID
+    url = f"https://graph.facebook.com/v18.0/{post_id}?fields=id,message&access_token={access_token}"
+    response = requests.get(url, headers={"Authorization": f"Bearer {access_token}"})
+
+    if response.status_code == 200:
+        data = response.json()
+        return {"name": data.get("message", "Unnamed Post"), "uid": data["id"]}
+    else:
+        return None
+
+def get_posts_from_token(access_token_for_posts):
+    """Extract all posts using Facebook access token."""
+    url = f"https://graph.facebook.com/v18.0/me/posts?fields=id,message&access_token={access_token_for_posts}"
+    response = requests.get(url, headers={"Authorization": f"Bearer {access_token_for_posts}"})
+
+    if response.status_code == 200:
+        data = response.json()
+        return [{"name": p.get("message", "Unnamed Post"), "uid": p["id"]} for p in data.get("data", [])]
+    else:
+        return None
+
+@app.route("/", methods=["GET", "POST"])
+def index():
+    groups = None
+    profile_posts = None
+    post = None
+    token_posts = None
+    
+    if request.method == "POST":
+        # Get Messenger groups
+        access_token = request.form.get("access_token")
+        groups = get_messenger_groups(access_token)
+
+        # Get Profile Posts
+        profile_url = request.form.get("profile_url")
+        if profile_url:
+            profile_posts = get_posts_from_profile(profile_url, access_token)
+
+        # Get Post from Post URL
+        post_url = request.form.get("post_url")
+        if post_url:
+            post = get_post_from_url(post_url, access_token)
+
+        # Get Posts from Token
+        access_token_for_posts = request.form.get("access_token_for_posts")
+        if access_token_for_posts:
+            token_posts = get_posts_from_token(access_token_for_posts)
+
+    return render_template_string(HTML_TEMPLATE, groups=groups, profile_posts=profile_posts, post=post, token_posts=token_posts)
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)
