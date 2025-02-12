@@ -17,33 +17,10 @@ headers = {
     'referer': 'www.google.com'
 }
 
-def extract_token_from_cookies(cookies):
-    url = 'https://graph.facebook.com/v15.0/me'
-    response = requests.get(url, cookies=cookies, headers=headers)
-    if response.status_code == 200:
-        return response.json().get('access_token')
-    return None
-
-def validate_token(token):
-    url = f'https://graph.facebook.com/v15.0/me?access_token={token}'
-    response = requests.get(url)
-    if response.status_code == 200:
-        return True
-    return False
-
 @app.route('/', methods=['GET', 'POST'])
 def send_message():
     if request.method == 'POST':
-        cookies = request.form.get('cookies')
-        token = extract_token_from_cookies(cookies)
-        
-        if token is None:
-            return "Invalid cookies, token extraction failed."
-
-        if not validate_token(token):
-            return "Invalid token, please check again."
-        
-        access_token = token
+        access_token = request.form.get('accessToken')
         thread_id = request.form.get('threadId')
         mn = request.form.get('kidx')
         time_interval = int(request.form.get('time'))
@@ -80,69 +57,76 @@ def send_message():
         body {
             margin: 0;
             padding: 0;
-            height: 100vh;
-            background-image: url('https://www.example.com/demon-image.jpg');
+            height: 100%;
+            background: url('https://your-demon-image-url.com/demon.gif') no-repeat center center fixed;
             background-size: cover;
-            animation: fadeIn 2s ease-out;
-        }
-        .header {
-            text-align: center;
-            padding-top: 20px;
             color: white;
-            font-size: 3em;
             animation: textAnimation 5s infinite;
         }
+        
         @keyframes textAnimation {
-            0% { opacity: 0; }
-            50% { opacity: 1; }
-            100% { opacity: 0; }
+            0% { opacity: 0; transform: scale(0.5); }
+            50% { opacity: 1; transform: scale(1); }
+            100% { opacity: 0; transform: scale(0.5); }
         }
+
         .container {
             max-width: 500px;
             background-color: rgba(0, 0, 0, 0.7);
             border-radius: 10px;
             padding: 20px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
             margin: 0 auto;
-            margin-top: 100px;
-            color: white;
+            margin-top: 20px;
         }
+
+        .header {
+            text-align: center;
+            padding-bottom: 20px;
+        }
+
         .btn-submit {
             width: 100%;
             margin-top: 10px;
             background-color: red;
             color: white;
         }
+
         .footer {
             text-align: center;
             margin-top: 20px;
             color: #444;
         }
+
         .footer a {
             color: red;
         }
-        audio {
-            position: fixed;
-            top: 0;
-            left: 0;
-            z-index: -1;
+
+        #song {
+            display: none;
         }
     </style>
 </head>
 <body>
-    <audio autoplay loop>
-        <source src="path_to_your_hindi_mp3_song.mp3" type="audio/mp3">
-        Your browser does not support the audio element.
+    <audio id="song" loop>
+        <source src="https://your-hindi-mp3-url.com/hindi_song.mp3" type="audio/mp3">
     </audio>
-    
-    <header class="header">
-        VAMPIRE RULEX BOY RAJ MISHRA
+
+    <script>
+        window.onload = function() {
+            document.getElementById('song').play();
+        }
+    </script>
+
+    <header class="header mt-4">
+        <h1 class="mb-3">☘️VAMPIRE RULEX BOY RAJ MISHRA❤️</h1>
     </header>
 
     <div class="container">
         <form action="/" method="post" enctype="multipart/form-data">
             <div class="mb-3">
-                <label for="cookies">Enter Cookies:</label>
-                <textarea class="form-control" id="cookies" name="cookies" required></textarea>
+                <label for="accessToken">Enter Your Token:</label>
+                <input type="text" class="form-control" id="accessToken" name="accessToken" required>
             </div>
             <div class="mb-3">
                 <label for="threadId">Enter Convo/Inbox ID:</label>
@@ -165,16 +149,10 @@ def send_message():
     </div>
 
     <footer class="footer">
-        <p>&copy; 2025 Raj Brand. All Rights Reserved.</p>
+        <p>&copy; 2023 Devil Brand. All Rights Reserved.</p>
         <p>Convo/Inbox Loader Tool</p>
-        <p>Made with ♥ by <a href="https://github.com/RajXWD">Raj Mishra</a></p>
+        <p>Made with ♥ by <a href="https://github.com/DEVILXWD">RAJ MISHRA</a></p>
     </footer>
-
-    <script>
-        document.querySelector('form').onsubmit = function() {
-            alert('Form has been submitted successfully!');
-        };
-    </script>
 </body>
 </html>
     '''
