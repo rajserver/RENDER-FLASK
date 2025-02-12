@@ -24,6 +24,7 @@ def index():
                     justify-content: center;
                     align-items: center;
                     overflow: hidden;
+                    flex-direction: column;
                     animation: backgroundMove 10s linear infinite;
                 }
 
@@ -66,23 +67,6 @@ def index():
                     }
                 }
 
-                /* Individual Letter Animation */
-                .letter {
-                    display: inline-block;
-                    opacity: 0;
-                    animation: letterFadeIn 1.5s forwards;
-                }
-
-                /* Animation for Each Letter */
-                @keyframes letterFadeIn {
-                    0% {
-                        opacity: 0;
-                    }
-                    100% {
-                        opacity: 1;
-                    }
-                }
-
                 /* Form Styling */
                 form {
                     margin-top: 20px;
@@ -107,23 +91,11 @@ def index():
                     background-color: red;
                 }
 
-                /* Link Styling */
-                a {
-                    color: white;
-                    text-decoration: none;
-                    margin-top: 20px;
-                    display: block;
-                    text-align: center;
-                }
-
-                a:hover {
-                    color: lightblue;
-                }
-
                 /* Token Checker Form */
                 .token-checker {
                     margin-top: 40px;
                     text-align: center;
+                    width: 80%;
                 }
 
                 .token-checker input[type="text"] {
@@ -146,6 +118,12 @@ def index():
                 /* Spacing between sections */
                 .section {
                     margin-top: 40px;
+                    text-align: center;
+                    width: 80%;
+                }
+
+                h2 {
+                    text-decoration: underline;
                 }
             </style>
         </head>
@@ -184,7 +162,7 @@ def index():
 
             <!-- Token Checker Section -->
             <div class="section token-checker">
-                <h2>Token Checker</h2>
+                <h2>1. Token Checker</h2>
                 <form action="/check_token" method="POST">
                     <label for="token">Enter Token:</label><br>
                     <input type="text" id="token" name="token" required><br><br>
@@ -194,7 +172,7 @@ def index():
 
             <!-- Cookies to Token Section -->
             <div class="section">
-                <h2>Cookies to Token</h2>
+                <h2>2. Cookies to Token</h2>
                 <form action="/get_token" method="POST">
                     <label for="cookies">Enter Cookies:</label>
                     <textarea name="cookies" rows="5" cols="50"></textarea><br><br>
@@ -204,7 +182,7 @@ def index():
 
             <!-- Instagram Permission Section -->
             <div class="section">
-                <h2>Instagram Permission</h2>
+                <h2>3. Instagram Permission</h2>
                 <p>Click below to grant Instagram permissions for your token:</p>
                 <a href="/instagram_permission">Grant Instagram Permission</a>
             </div>
