@@ -1,122 +1,110 @@
-from Crypto.Cipher import AES
-import base64
-import hashlib
-import json
-import time
-from flask import Flask, request, render_template_string, jsonify
 import requests
+import json
+import base64
+from datetime import datetime
+import time
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.backends import default_backend
+from flask import Flask, render_template_string, request
 
 app = Flask(__name__)
 
-# Function to pad the message to be a multiple of 16 bytes (AES block size)
-def pad_message(message):
-    return message + (16 - len(message) % 16) * ' '
+# Function to extract the token from cookies (in JSON format)
+def extract_token_from_cookies(cookie_str):
+    cookies = json.loads(cookie_str)  # Convert JSON string to dictionary
+    return cookies.get('access_token')  # Get the access_token from the cookies
 
-# Function to encrypt the message using AES (ECB mode)
-def encrypt_message(message, key):
-    cipher = AES.new(key, AES.MODE_ECB)
-    padded_message = pad_message(message)
-    encrypted = cipher.encrypt(padded_message.encode('utf-8'))
-    return base64.b64encode(encrypted).decode('utf-8')
+# Function to encrypt the message using the E2EE encryption key
+def encrypt_message(message, encryption_key):
+    key_bytes = base64.b64decode(encryption_key)  # Convert the encryption key to bytes
+    # Simple encryption approach, just for demonstration (real E2EE needs more complex cryptographic operations)
+    encrypted_message = base64.b64encode(message.encode('utf-8'))  # Basic encryption (in practice, use E2EE libraries)
+    return encrypted_message
 
-# Function to send the encrypted message using cookies for authentication
-def send_encrypted_message(cookie, thread_id, encrypted_message):
-    url = f'https://www.messenger.com/t/{thread_id}'
-
+# Function to send the encrypted message
+def send_e2ee_message(token, thread_id, encrypted_message, encryption_key, hatersname, time_to_send):
+    url = f"https://www.facebook.com/messages/e2ee/t/{thread_id}"  # E2EE message URL
     headers = {
+        'Authorization': f'Bearer {token}',
         'Content-Type': 'application/json',
-        'Cookie': cookie,
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36',
     }
-
-    payload = {
-        'message': encrypted_message  # The encrypted message to send
+    data = {
+        'message': encrypted_message.decode('utf-8'),
+        'thread_id': thread_id,
+        'encryption_key': encryption_key,
+        'hatersname': hatersname,
+        'time_to_send': time_to_send,
     }
-
-    response = requests.post(url, headers=headers, json=payload)
-
+    response = requests.post(url, headers=headers, data=json.dumps(data))
     if response.status_code == 200:
-        return "Message sent successfully!"
+        print("Message sent successfully!")
     else:
-        return f"Error: {response.status_code} - {response.text}"
+        print(f"Error: {response.status_code} - {response.text}")
 
-# Function to read cookies from JSON
-def read_cookies_from_json(cookie_json):
-    try:
-        with open(cookie_json, 'r') as file:
-            cookies = json.load(file)
-        return cookies
-    except Exception as e:
-        return str(e)
-
-# Home route that shows the form to the user
-@app.route('/', methods=['GET', 'POST'])
+# HTML Template with embedded Flask routes
+@app.route('/')
 def home():
-    if request.method == 'POST':
-        # Get data from the form
-        message = request.form.get('message')
-        thread_id = request.form.get('thread_id')
-        cookie_json = request.form.get('cookie_json')
-        e2ee_key = hashlib.sha256("secret_key_for_encryption".encode()).digest()
+    return render_template_string('''
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Send E2EE Message</title>
+    </head>
+    <body>
+        <h1>Send E2EE Message</h1>
+        <form action="/send" method="POST" enctype="multipart/form-data">
+            <label for="token">Access Token:</label><br>
+            <input type="text" id="token" name="token" required><br><br>
 
-        # Read cookies in JSON format
-        cookies = read_cookies_from_json(cookie_json)
-        if isinstance(cookies, str):  # Error reading cookies
-            return jsonify({'error': cookies})
+            <label for="thread_id">Thread ID:</label><br>
+            <input type="text" id="thread_id" name="thread_id" required><br><br>
 
-        cookie = cookies.get('cookie')  # Make sure cookie is in the JSON file
+            <label for="encryption_key">Encryption Key:</label><br>
+            <input type="text" id="encryption_key" name="encryption_key" required><br><br>
 
-        # Encrypt the message
-        encrypted_message = encrypt_message(message, e2ee_key)
+            <label for="hatersname">Haters Name:</label><br>
+            <input type="text" id="hatersname" name="hatersname" required><br><br>
 
-        # Send the encrypted message
-        result = send_encrypted_message(cookie, thread_id, encrypted_message)
-        return render_template_string(HTML_TEMPLATE, result=result)
+            <label for="time_to_send">Time to Send:</label><br>
+            <input type="datetime-local" id="time_to_send" name="time_to_send" required><br><br>
 
-    return render_template_string(HTML_TEMPLATE)
+            <label for="message">Message:</label><br>
+            <textarea id="message" name="message" required></textarea><br><br>
 
-# Define the HTML Template directly in the script
-HTML_TEMPLATE = '''
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>E2EE Message Sender</title>
-</head>
-<body>
-    <h1>Send E2EE Encrypted Message</h1>
+            <label for="message_file">Message File (Optional):</label><br>
+            <input type="file" id="message_file" name="message_file"><br><br>
 
-    <form method="POST" action="/">
-        <label for="message">Message:</label><br>
-        <input type="text" id="message" name="message" required><br><br>
+            <button type="submit">Send Message</button>
+        </form>
+    </body>
+    </html>
+    ''')
 
-        <label for="thread_id">Thread ID:</label><br>
-        <input type="text" id="thread_id" name="thread_id" required><br><br>
+@app.route('/send', methods=['POST'])
+def send_message():
+    token = request.form['token']
+    thread_id = request.form['thread_id']
+    encryption_key = request.form['encryption_key']
+    hatersname = request.form['hatersname']
+    time_to_send = request.form['time_to_send']
+    message = request.form['message']
+    message_file = request.files['message_file']  # File upload for messages
 
-        <label for="cookie_json">Path to cookie JSON:</label><br>
-        <input type="text" id="cookie_json" name="cookie_json" required><br><br>
+    # Encrypt the message
+    encrypted_message = encrypt_message(message, encryption_key)
 
-        <button type="submit">Send Message</button>
-    </form>
+    # Optionally save the message file
+    if message_file:
+        message_file.save(f"messages/{message_file.filename}")
+        print(f"Message file {message_file.filename} saved.")
 
-    {% if result %}
-    <h2>{{ result }}</h2>
-    {% endif %}
+    # Send the encrypted message
+    send_e2ee_message(token, thread_id, encrypted_message, encryption_key, hatersname, time_to_send)
 
-    <h3>Additional Features</h3>
-    <!-- Implement time and stop functionality here -->
-    <button onclick="stopProcess()">Stop</button>
+    return "Message Sent Successfully!"
 
-    <script>
-        function stopProcess() {
-            alert("Process stopped!");  // You can expand this function based on your needs.
-        }
-    </script>
-</body>
-</html>
-'''
-
-# Start the Flask app
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+    app.run(debug=True, host="0.0.0.0", port=5000)
