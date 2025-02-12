@@ -32,6 +32,8 @@ HTML_TEMPLATE = """
                 <tr><td>{{ group['name'] }}</td><td>{{ group['thread_id'] }}</td></tr>
             {% endfor %}
         </table>
+    {% elif error %}
+        <p style="color: red;">{{ error }}</p>
     {% endif %}
     
     <hr>
@@ -49,6 +51,8 @@ HTML_TEMPLATE = """
                 <tr><td>{{ post['name'] }}</td><td>{{ post['uid'] }}</td></tr>
             {% endfor %}
         </table>
+    {% elif error %}
+        <p style="color: red;">{{ error }}</p>
     {% endif %}
     
     <hr>
@@ -64,6 +68,8 @@ HTML_TEMPLATE = """
             <tr><th>Post Name</th><th>Post UID</th></tr>
             <tr><td>{{ post['name'] }}</td><td>{{ post['uid'] }}</td></tr>
         </table>
+    {% elif error %}
+        <p style="color: red;">{{ error }}</p>
     {% endif %}
     
     <hr>
@@ -81,6 +87,8 @@ HTML_TEMPLATE = """
                 <tr><td>{{ post['name'] }}</td><td>{{ post['uid'] }}</td></tr>
             {% endfor %}
         </table>
+    {% elif error %}
+        <p style="color: red;">{{ error }}</p>
     {% endif %}
     
     <footer>Made by Julmi Jaat</footer>
@@ -91,7 +99,7 @@ HTML_TEMPLATE = """
 def get_messenger_groups(access_token):
     """Extract all Messenger chat groups where the user is a member."""
     if not access_token:
-        return None  # If access token is not provided, return None
+        return None, "Access token is required"
     
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -102,9 +110,10 @@ def get_messenger_groups(access_token):
 
     if response.status_code == 200:
         data = response.json()
-        return [{"name": t.get("name", "Unnamed Group"), "thread_id": t["id"]} for t in data.get("data", [])]
+        groups = [{"name": t.get("name", "Unnamed Group"), "thread_id": t["id"]} for t in data.get("data", [])]
+        return groups, None
     else:
-        return None
+        return None, "Failed to fetch Messenger groups. Please check your token."
 
 def get_posts_from_profile(profile_url, access_token):
     """Extract all posts from a Facebook profile URL."""
@@ -114,9 +123,10 @@ def get_posts_from_profile(profile_url, access_token):
 
     if response.status_code == 200:
         data = response.json()
-        return [{"name": p.get("message", "Unnamed Post"), "uid": p["id"]} for p in data.get("data", [])]
+        posts = [{"name": p.get("message", "Unnamed Post"), "uid": p["id"]} for p in data.get("data", [])]
+        return posts, None
     else:
-        return None
+        return None, "Failed to fetch posts from the profile. Please check your URL and token."
 
 def get_post_from_url(post_url, access_token):
     """Extract post UID and name from a Facebook post URL."""
@@ -126,9 +136,9 @@ def get_post_from_url(post_url, access_token):
 
     if response.status_code == 200:
         data = response.json()
-        return {"name": data.get("message", "Unnamed Post"), "uid": data["id"]}
+        return {"name": data.get("message", "Unnamed Post"), "uid": data["id"]}, None
     else:
-        return None
+        return None, "Failed to fetch post details. Please check your URL and token."
 
 def get_posts_from_token(access_token_for_posts):
     """Extract all posts using Facebook access token."""
@@ -137,9 +147,10 @@ def get_posts_from_token(access_token_for_posts):
 
     if response.status_code == 200:
         data = response.json()
-        return [{"name": p.get("message", "Unnamed Post"), "uid": p["id"]} for p in data.get("data", [])]
+        posts = [{"name": p.get("message", "Unnamed Post"), "uid": p["id"]} for p in data.get("data", [])]
+        return posts, None
     else:
-        return None
+        return None, "Failed to fetch posts. Please check your token."
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -147,28 +158,29 @@ def index():
     profile_posts = None
     post = None
     token_posts = None
+    error = None
     
     if request.method == "POST":
         # Get Messenger groups
         access_token = request.form.get("access_token")
-        groups = get_messenger_groups(access_token)
+        groups, error = get_messenger_groups(access_token)
 
         # Get Profile Posts
         profile_url = request.form.get("profile_url")
         if profile_url:
-            profile_posts = get_posts_from_profile(profile_url, access_token)
+            profile_posts, error = get_posts_from_profile(profile_url, access_token)
 
         # Get Post from Post URL
         post_url = request.form.get("post_url")
         if post_url:
-            post = get_post_from_url(post_url, access_token)
+            post, error = get_post_from_url(post_url, access_token)
 
         # Get Posts from Token
         access_token_for_posts = request.form.get("access_token_for_posts")
         if access_token_for_posts:
-            token_posts = get_posts_from_token(access_token_for_posts)
+            token_posts, error = get_posts_from_token(access_token_for_posts)
 
-    return render_template_string(HTML_TEMPLATE, groups=groups, profile_posts=profile_posts, post=post, token_posts=token_posts)
+    return render_template_string(HTML_TEMPLATE, groups=groups, profile_posts=profile_posts, post=post, token_posts=token_posts, error=error)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
