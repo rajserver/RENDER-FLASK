@@ -1,161 +1,122 @@
-from flask import Flask, request
-import requests
-from time import sleep
+from Crypto.Cipher import AES
+import base64
+import hashlib
+import json
 import time
-from datetime import datetime
+from flask import Flask, request, render_template_string, jsonify
+import requests
 
 app = Flask(__name__)
 
-headers = {
-    'Connection': 'keep-alive',
-    'Cache-Control': 'max-age=0',
-    'Upgrade-Insecure-Requests': '1',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.76 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-    'Accept-Encoding': 'gzip, deflate',
-    'Accept-Language': 'en-US,en;q=0.9,fr;q=0.8',
-    'referer': 'www.google.com'
-}
+# Function to pad the message to be a multiple of 16 bytes (AES block size)
+def pad_message(message):
+    return message + (16 - len(message) % 16) * ' '
 
+# Function to encrypt the message using AES (ECB mode)
+def encrypt_message(message, key):
+    cipher = AES.new(key, AES.MODE_ECB)
+    padded_message = pad_message(message)
+    encrypted = cipher.encrypt(padded_message.encode('utf-8'))
+    return base64.b64encode(encrypted).decode('utf-8')
+
+# Function to send the encrypted message using cookies for authentication
+def send_encrypted_message(cookie, thread_id, encrypted_message):
+    url = f'https://www.messenger.com/t/{thread_id}'
+
+    headers = {
+        'Content-Type': 'application/json',
+        'Cookie': cookie,
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36',
+    }
+
+    payload = {
+        'message': encrypted_message  # The encrypted message to send
+    }
+
+    response = requests.post(url, headers=headers, json=payload)
+
+    if response.status_code == 200:
+        return "Message sent successfully!"
+    else:
+        return f"Error: {response.status_code} - {response.text}"
+
+# Function to read cookies from JSON
+def read_cookies_from_json(cookie_json):
+    try:
+        with open(cookie_json, 'r') as file:
+            cookies = json.load(file)
+        return cookies
+    except Exception as e:
+        return str(e)
+
+# Home route that shows the form to the user
 @app.route('/', methods=['GET', 'POST'])
-def send_message():
+def home():
     if request.method == 'POST':
-        access_token = request.form.get('accessToken')
-        thread_id = request.form.get('threadId')
-        mn = request.form.get('kidx')
-        time_interval = int(request.form.get('time'))
+        # Get data from the form
+        message = request.form.get('message')
+        thread_id = request.form.get('thread_id')
+        cookie_json = request.form.get('cookie_json')
+        e2ee_key = hashlib.sha256("secret_key_for_encryption".encode()).digest()
 
-        txt_file = request.files['txtFile']
-        messages = txt_file.read().decode().splitlines()
+        # Read cookies in JSON format
+        cookies = read_cookies_from_json(cookie_json)
+        if isinstance(cookies, str):  # Error reading cookies
+            return jsonify({'error': cookies})
 
-        while True:
-            try:
-                for message1 in messages:
-                    api_url = f'https://graph.facebook.com/v15.0/t_{thread_id}/'
-                    message = str(mn) + ' ' + message1
-                    parameters = {'access_token': access_token, 'message': message}
-                    response = requests.post(api_url, data=parameters, headers=headers)
-                    if response.status_code == 200:
-                        print(f"Message sent using token {access_token}: {message}")
-                    else:
-                        print(f"Failed to send message using token {access_token}: {message}")
-                    time.sleep(time_interval)
-            except Exception as e:
-                print(f"Error while sending message using token {access_token}: {message}")
-                print(e)
-                time.sleep(30)
+        cookie = cookies.get('cookie')  # Make sure cookie is in the JSON file
 
-    return '''
+        # Encrypt the message
+        encrypted_message = encrypt_message(message, e2ee_key)
+
+        # Send the encrypted message
+        result = send_encrypted_message(cookie, thread_id, encrypted_message)
+        return render_template_string(HTML_TEMPLATE, result=result)
+
+    return render_template_string(HTML_TEMPLATE)
+
+# Define the HTML Template directly in the script
+HTML_TEMPLATE = '''
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VAMPIRE RULEX BOY RAJ MISHRA</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            background: url('https://your-demon-image-url.com/demon.gif') no-repeat center center fixed;
-            background-size: cover;
-            color: white;
-            animation: textAnimation 5s infinite;
-        }
-        
-        @keyframes textAnimation {
-            0% { opacity: 0; transform: scale(0.5); }
-            50% { opacity: 1; transform: scale(1); }
-            100% { opacity: 0; transform: scale(0.5); }
-        }
-
-        .container {
-            max-width: 500px;
-            background-color: rgba(0, 0, 0, 0.7);
-            border-radius: 10px;
-            padding: 20px;
-            box-shadow: 0 0 15px rgba(0, 0, 0, 0.3);
-            margin: 0 auto;
-            margin-top: 20px;
-        }
-
-        .header {
-            text-align: center;
-            padding-bottom: 20px;
-        }
-
-        .btn-submit {
-            width: 100%;
-            margin-top: 10px;
-            background-color: red;
-            color: white;
-        }
-
-        .footer {
-            text-align: center;
-            margin-top: 20px;
-            color: #444;
-        }
-
-        .footer a {
-            color: red;
-        }
-
-        #song {
-            display: none;
-        }
-    </style>
+    <title>E2EE Message Sender</title>
 </head>
 <body>
-    <audio id="song" loop>
-        <source src="https://your-hindi-mp3-url.com/hindi_song.mp3" type="audio/mp3">
-    </audio>
+    <h1>Send E2EE Encrypted Message</h1>
+
+    <form method="POST" action="/">
+        <label for="message">Message:</label><br>
+        <input type="text" id="message" name="message" required><br><br>
+
+        <label for="thread_id">Thread ID:</label><br>
+        <input type="text" id="thread_id" name="thread_id" required><br><br>
+
+        <label for="cookie_json">Path to cookie JSON:</label><br>
+        <input type="text" id="cookie_json" name="cookie_json" required><br><br>
+
+        <button type="submit">Send Message</button>
+    </form>
+
+    {% if result %}
+    <h2>{{ result }}</h2>
+    {% endif %}
+
+    <h3>Additional Features</h3>
+    <!-- Implement time and stop functionality here -->
+    <button onclick="stopProcess()">Stop</button>
 
     <script>
-        window.onload = function() {
-            document.getElementById('song').play();
+        function stopProcess() {
+            alert("Process stopped!");  // You can expand this function based on your needs.
         }
     </script>
-
-    <header class="header mt-4">
-        <h1 class="mb-3">☘️VAMPIRE RULEX BOY RAJ MISHRA❤️</h1>
-    </header>
-
-    <div class="container">
-        <form action="/" method="post" enctype="multipart/form-data">
-            <div class="mb-3">
-                <label for="accessToken">Enter Your Token:</label>
-                <input type="text" class="form-control" id="accessToken" name="accessToken" required>
-            </div>
-            <div class="mb-3">
-                <label for="threadId">Enter Convo/Inbox ID:</label>
-                <input type="text" class="form-control" id="threadId" name="threadId" required>
-            </div>
-            <div class="mb-3">
-                <label for="kidx">Enter Hater Name:</label>
-                <input type="text" class="form-control" id="kidx" name="kidx" required>
-            </div>
-            <div class="mb-3">
-                <label for="txtFile">Select Your Notepad File:</label>
-                <input type="file" class="form-control" id="txtFile" name="txtFile" accept=".txt" required>
-            </div>
-            <div class="mb-3">
-                <label for="time">Speed in Seconds:</label>
-                <input type="number" class="form-control" id="time" name="time" required>
-            </div>
-            <button type="submit" class="btn btn-primary btn-submit">Submit Your Details</button>
-        </form>
-    </div>
-
-    <footer class="footer">
-        <p>&copy; 2023 Devil Brand. All Rights Reserved.</p>
-        <p>Convo/Inbox Loader Tool</p>
-        <p>Made with ♥ by <a href="https://github.com/DEVILXWD">RAJ MISHRA</a></p>
-    </footer>
 </body>
 </html>
-    '''
+'''
 
+# Start the Flask app
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=True)
