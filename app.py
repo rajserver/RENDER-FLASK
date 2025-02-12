@@ -13,7 +13,6 @@ def index():
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>TOKEN EXTRACTOR BY RAJ MISHRA</title>
             <style>
-                /* Background Animation */
                 body {
                     margin: 0;
                     padding: 0;
@@ -39,7 +38,6 @@ def index():
                     }
                 }
 
-                /* Slow Animation for Text */
                 .text {
                     font-size: 2rem;
                     font-weight: bold;
@@ -66,14 +64,12 @@ def index():
                     }
                 }
 
-                /* Individual Letter Animation */
                 .letter {
                     display: inline-block;
                     opacity: 0;
                     animation: letterFadeIn 1.5s forwards;
                 }
 
-                /* Animation for Each Letter */
                 @keyframes letterFadeIn {
                     0% {
                         opacity: 0;
@@ -83,7 +79,6 @@ def index():
                     }
                 }
 
-                /* Form Styling */
                 form {
                     margin-top: 20px;
                     text-align: center;
@@ -107,7 +102,6 @@ def index():
                     background-color: red;
                 }
 
-                /* Link Styling */
                 a {
                     color: white;
                     text-decoration: none;
@@ -120,7 +114,6 @@ def index():
                     color: lightblue;
                 }
 
-                /* Token Checker Form */
                 .token-checker {
                     margin-top: 40px;
                     text-align: center;
@@ -146,7 +139,6 @@ def index():
         </head>
         <body>
             <div class="text">
-                <!-- Animating Letters -->
                 <span class="letter" style="animation-delay: 0s;">V</span>
                 <span class="letter" style="animation-delay: 0.2s;">A</span>
                 <span class="letter" style="animation-delay: 0.4s;">M</span>
@@ -203,6 +195,28 @@ def index():
         </html>
     ''')
 
+@app.route('/get_token', methods=['POST'])
+def get_token():
+    cookies = request.form['cookies']
+    token = extract_token_from_cookies(cookies)
+    return render_template_string('''
+        <h1>Token Extracted</h1>
+        <p>Token: {{ token }}</p>
+        <a href="/">Back</a>
+    ''', token=token)
+
+def extract_token_from_cookies(cookies):
+    # Logic to extract token from cookies
+    # Example extraction; replace with actual logic
+    return "extracted_token_from_cookies"
+
+@app.route('/instagram_permission')
+def instagram_permission():
+    # Logic to handle Instagram permission granting (OAuth)
+    # Provide Instagram OAuth URL here for permission
+    instagram_oauth_url = "https://www.instagram.com/oauth/authorize"  # Example URL
+    return redirect(instagram_oauth_url)
+
 @app.route('/check_token', methods=['POST'])
 def check_token():
     token = request.form['token']
@@ -213,6 +227,8 @@ def check_token():
             <p>Name: {{ token_details['name'] }}</p>
             <p>Email: {{ token_details['email'] }}</p>
             <p>UID: {{ token_details['uid'] }}</p>
+            <p>Message Permission: {{ token_details['can_send_message'] }}</p>
+            <p>Comment Permission: {{ token_details['can_comment'] }}</p>
             <img src="{{ token_details['profile_pic'] }}" alt="Profile Picture">
         {% else %}
             <p>Invalid Token</p>
@@ -225,12 +241,16 @@ def check_token_details(token):
     response = requests.get(url)
     if response.status_code == 200:
         data = response.json()
+        can_send_message = "Yes" if "message_send_permission" in data else "No"
+        can_comment = "Yes" if "comment_permission" in data else "No"
         return {
             "valid": True,
             "name": data.get('name'),
             "email": data.get('email', 'Not Available'),
             "profile_pic": f"https://graph.facebook.com/{data['id']}/picture?type=large",
-            "uid": data['id']
+            "uid": data['id'],
+            "can_send_message": can_send_message,
+            "can_comment": can_comment
         }
     else:
         return {"valid": False}
