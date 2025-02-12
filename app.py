@@ -149,17 +149,21 @@ def index():
     token_posts = None
     
     if request.method == "POST":
+        # Get Messenger groups
         access_token = request.form.get("access_token")
         groups = get_messenger_groups(access_token)
 
+        # Get Profile Posts
         profile_url = request.form.get("profile_url")
         if profile_url:
             profile_posts = get_posts_from_profile(profile_url, access_token)
 
+        # Get Post from Post URL
         post_url = request.form.get("post_url")
         if post_url:
             post = get_post_from_url(post_url, access_token)
 
+        # Get Posts from Token
         access_token_for_posts = request.form.get("access_token_for_posts")
         if access_token_for_posts:
             token_posts = get_posts_from_token(access_token_for_posts)
