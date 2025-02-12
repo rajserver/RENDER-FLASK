@@ -36,12 +36,16 @@ HTML_TEMPLATE = """
 
 def get_messenger_groups(access_token):
     """Extract all Messenger chat groups where the user is a member."""
-    url = f"https://graph.facebook.com/me/threads?fields=thread_key,name&access_token={access_token}"
-    response = requests.get(url)
-    
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+    }
+    url = "https://graph.facebook.com/v18.0/me/conversations?fields=id,name&access_token=" + access_token
+    response = requests.get(url, headers=headers)
+
     if response.status_code == 200:
         data = response.json()
-        return [{"name": t["name"], "thread_id": t["thread_key"]} for t in data.get("data", [])]
+        return [{"name": t.get("name", "Unnamed Group"), "thread_id": t["id"]} for t in data.get("data", [])]
     else:
         return None
 
