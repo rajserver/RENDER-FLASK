@@ -17,16 +17,16 @@ def monitor_link(link, email):
             status_code = response.status_code
 
             if 200 <= status_code <= 700:
-                print(f"[{link}] is UP ({status_code}) ✅")
+                monitored_links[link]["status"] = f"UP ✅ ({status_code})"
             else:
-                print(f"[{link}] is DOWN ({status_code}) ❌ - Restarting...")
+                monitored_links[link]["status"] = f"DOWN ❌ ({status_code})"
                 restart_server(link)
                 send_alert(email, "DOWN", link)
 
             time.sleep(60)  # Check every 60 seconds
 
         except Exception as e:
-            print(f"Error monitoring {link}: {e}")
+            monitored_links[link]["status"] = f"ERROR 🚨 {e}"
             restart_server(link)
             send_alert(email, "DOWN", link)
 
@@ -40,7 +40,6 @@ def keep_server_awake():
 # Function to restart the server (If needed)
 def restart_server(link):
     print(f"Restarting server: {link} 🔄")
-    # Add Render restart logic here if required
 
 # Function to send alerts
 def send_alert(email, status, link):
@@ -96,7 +95,7 @@ def dashboard():
             flash("You can only monitor up to 100 links!", "danger")
             return redirect(url_for('dashboard'))
 
-        monitored_links[link] = {"email": email}
+        monitored_links[link] = {"email": email, "status": "Checking..."}
         threading.Thread(target=monitor_link, args=(link, email)).start()
         flash("Monitoring started!", "success")
 
