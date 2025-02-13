@@ -4,54 +4,68 @@ import time
 import threading
 
 app = Flask(__name__)
-app.secret_key = "your_secret_key"  # Secret key for session management
+app.secret_key = "your_secret_key"  # Session ke liye Secret Key
 
 # Store monitored links
 monitored_links = {}
 
 # Function to monitor Render links
-def monitor_link(link, email, uid):
+def monitor_link(link, email):
     while True:
         try:
             response = requests.get(link, timeout=5)
             status_code = response.status_code
 
-            if status_code >= 200 and status_code <= 700:
+            if 200 <= status_code <= 700:
                 print(f"[{link}] is UP ({status_code}) ✅")
             else:
                 print(f"[{link}] is DOWN ({status_code}) ❌ - Restarting...")
                 restart_server(link)
-                send_alert(uid, email, "DOWN", link)
+                send_alert(email, "DOWN", link)
 
             time.sleep(60)  # Check every 60 seconds
 
         except Exception as e:
             print(f"Error monitoring {link}: {e}")
             restart_server(link)
-            send_alert(uid, email, "DOWN", link)
+            send_alert(email, "DOWN", link)
 
-# Function to restart the server
+# Function to keep server active (Ping every 3 minutes)
+def keep_server_awake():
+    while True:
+        requests.get("https://your-deployed-url.onrender.com")  # Replace with actual Render URL
+        print("Pinged self to prevent sleep mode! 🔄")
+        time.sleep(180)  # Ping every 3 minutes
+
+# Function to restart the server (If needed)
 def restart_server(link):
     print(f"Restarting server: {link} 🔄")
-    # Add Render restart logic here (if required)
+    # Add Render restart logic here if required
 
 # Function to send alerts
-def send_alert(uid, email, status, link):
-    print(f"Sending alert to {uid} and {email} - {status} ALERT for {link}")
+def send_alert(email, status, link):
+    print(f"Sending alert to {email} - {status} ALERT for {link}")
 
 # Homepage
 @app.route('/')
 def home():
-    return render_template('login.html')
+    if 'email' in session:
+        return redirect(url_for('dashboard'))  # Auto redirect to Dashboard if already logged in
+    return redirect(url_for('login'))
 
 # Login Page
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    if 'email' in session:  
+        return redirect(url_for('dashboard'))  # Already logged in, go to dashboard
+
     if request.method == 'POST':
         email = request.form['email']
         password = request.form['password']
-        session['email'] = email
+        session['email'] = email  # Store login session
+        flash("Login successful!", "success")
         return redirect(url_for('dashboard'))
+    
     return render_template('login.html')
 
 # Sign-up Page
@@ -60,7 +74,7 @@ def signup():
     if request.method == 'POST':
         email = request.form['email']
         password = request.form['password']
-        flash('Account created successfully! Please login.')
+        flash('Account created successfully! Please login.', "success")
         return redirect(url_for('login'))
     return render_template('signup.html')
 
@@ -72,7 +86,6 @@ def dashboard():
     
     if request.method == 'POST':
         link = request.form['link']
-        uid = request.form['uid']
         email = session['email']
 
         if "render.com" not in link:
@@ -83,17 +96,21 @@ def dashboard():
             flash("You can only monitor up to 100 links!", "danger")
             return redirect(url_for('dashboard'))
 
-        monitored_links[link] = {"email": email, "uid": uid}
-        threading.Thread(target=monitor_link, args=(link, email, uid)).start()
+        monitored_links[link] = {"email": email}
+        threading.Thread(target=monitor_link, args=(link, email)).start()
         flash("Monitoring started!", "success")
 
     return render_template('dashboard.html', links=monitored_links)
 
-# Logout
+# Logout (Clears Session)
 @app.route('/logout')
 def logout():
     session.pop('email', None)
+    flash("You have been logged out!", "info")
     return redirect(url_for('login'))
+
+# Start pinging to keep server awake
+threading.Thread(target=keep_server_awake, daemon=True).start()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
