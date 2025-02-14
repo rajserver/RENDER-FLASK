@@ -1,114 +1,117 @@
-from flask import Flask, render_template, request, redirect, url_for, session
-from datetime import datetime
-import os
-import json
-import time
-import random
+from flask import Flask, request, render_template_string
 import requests
-import threading
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)
 
-monitors = {}
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Messenger Group UID Extractor</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #2c3e50; color: white; text-align: center; }
+        input, button { padding: 10px; margin: 10px; }
+        table { margin: auto; width: 80%; border-collapse: collapse; background-color: white; color: black; }
+        th, td { border: 1px solid black; padding: 10px; text-align: left; }
+        footer { text-align: center; font-size: 14px; color: white; margin-top: 20px; }
+        header { font-size: 20px; font-weight: bold; color: white; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <header>Made by Julmi Jaat</header>
+    <h2>Messenger Chat Group UID Extractor</h2>
+    <form method="post">
+        <input type="text" name="access_token" placeholder="Enter Facebook Access Token" required>
+        <button type="submit">Extract Chat Groups</button>
+    </form>
+    {% if groups %}
+        <h3>Extracted Chat Groups:</h3>
+        <table>
+            <tr><th>Chat Name</th><th>Thread ID</th></tr>
+            {% for group in groups %}
+                <tr><td>{{ group['name'] }}</td><td>{{ group['thread_id'] }}</td></tr>
+            {% endfor %}
+        </table>
+    {% endif %}
 
-# A mock function to check if server is up or not
-def monitor_link(url):
-    try:
-        response = requests.get(url)
-        if response.status_code in range(200, 701):
-            return True
-        else:
-            return False
-    except Exception as e:
-        print(f"Error: {e}")
-        return False
+    <hr>
 
-# Function to handle monitoring with auto-recovery
-def monitor_and_recover():
-    while True:
-        for uid, monitor_data in monitors.items():
-            url = monitor_data["url"]
-            if not monitor_link(url):
-                monitors[uid]["status"] = "Down"
-                print(f"Monitor {uid} is Down. Trying to recover...")
-                # Simulating recovery action
-                time.sleep(60)
-                monitors[uid]["status"] = "Up"
-                print(f"Monitor {uid} is back Up!")
-        time.sleep(180)  # Check every 3 minutes
+    <h2>Post UID Extractor from Facebook Profile URL</h2>
+    <form method="post">
+        <input type="text" name="profile_url" placeholder="Enter Facebook Profile URL" required>
+        <button type="submit">Extract Posts from Profile</button>
+    </form>
+    {% if profile_posts %}
+        <h3>Extracted Profile Posts:</h3>
+        <table>
+            <tr><th>Post Name</th><th>Post UID</th></tr>
+            {% for post in profile_posts %}
+                <tr><td>{{ post['name'] }}</td><td>{{ post['uid'] }}</td></tr>
+            {% endfor %}
+        </table>
+    {% endif %}
 
-@app.route("/")
-def home():
-    if 'user_id' in session:
-        return render_template("index.html", monitors=monitors)
-    return redirect(url_for("login"))
+    <hr>
 
-@app.route("/login", methods=["GET", "POST"])
-def login():
+    <h2>Post UID Extractor from Post URL</h2>
+    <form method="post">
+        <input type="text" name="post_url" placeholder="Enter Facebook Post URL" required>
+        <button type="submit">Extract Post UID</button>
+    </form>
+    {% if post %}
+        <h3>Extracted Post UID:</h3>
+        <table>
+            <tr><th>Post Name</th><th>Post UID</th></tr>
+            <tr><td>{{ post['name'] }}</td><td>{{ post['uid'] }}</td></tr>
+        </table>
+    {% endif %}
+
+    <hr>
+
+    <h2>Post UID Extractor from Access Token</h2>
+    <form method="post">
+        <input type="text" name="access_token_for_posts" placeholder="Enter Facebook Access Token" required>
+        <button type="submit">Extract Posts from Token</button>
+    </form>
+    {% if token_posts %}
+        <h3>Extracted Posts from Token:</h3>
+        <table>
+            <tr><th>Post Name</th><th>Post UID</th></tr>
+            {% for post in token_posts %}
+                <tr><td>{{ post['name'] }}</td><td>{{ post['uid'] }}</td></tr>
+            {% endfor %}
+        </table>
+    {% endif %}
+
+    <footer>Made by Julmi Jaat</footer>
+</body>
+</html>
+"""
+
+def get_messenger_groups(access_token):
+    if not access_token:
+        return None
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+    }
+    url = f"https://graph.facebook.com/v17.0/me/conversations?fields=id,name&access_token={access_token}"
+    response = requests.get(url, headers=headers)
+
+    if response.status_code == 200:
+        data = response.json()
+        return [{"name": t.get("name", "Unnamed Group"), "thread_id": t["id"]} for t in data.get("data", [])]
+    return None
+
+@app.route("/", methods=["GET", "POST"])
+def index():
+    groups, profile_posts, post, token_posts = None, None, None, None
+
     if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
-        if username == "admin" and password == "password":  # Placeholder for actual authentication
-            session['user_id'] = username
-            return redirect(url_for("home"))
-    return render_template("login.html")
+        access_token = request.form.get("access_token")
+        groups = get_messenger_groups(access_token)
 
-@app.route("/signup", methods=["GET", "POST"])
-def signup():
-    if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
-        # Here, you would save the username and password (preferably in a database)
-        # For simplicity, let's assume you just print them to console
-        print(f"New User Registered: {username}, {password}")
-        # After registration, you can automatically log in the user or redirect to login
-        return redirect(url_for("login"))
-    return render_template("signup.html")
-
-@app.route("/logout")
-def logout():
-    session.pop('user_id', None)
-    return redirect(url_for("login"))
-
-@app.route("/add_monitor", methods=["POST"])
-def add_monitor():
-    if 'user_id' in session:
-        url = request.form["url"]
-        friendly_name = request.form["friendly_name"]
-        monitor_id = str(random.randint(1000, 9999))
-        monitors[monitor_id] = {
-            "url": url,
-            "status": "Up",
-            "name": friendly_name,
-            "created_at": str(datetime.now())
-        }
-        return redirect(url_for("home"))
-    return redirect(url_for("login"))
-
-@app.route("/edit_monitor/<monitor_id>", methods=["GET", "POST"])
-def edit_monitor(monitor_id):
-    if 'user_id' in session:
-        if request.method == "POST":
-            url = request.form["url"]
-            friendly_name = request.form["friendly_name"]
-            monitors[monitor_id]["url"] = url
-            monitors[monitor_id]["name"] = friendly_name
-            return redirect(url_for("home"))
-        return render_template("edit_monitor.html", monitor=monitors[monitor_id])
-    return redirect(url_for("login"))
-
-@app.route("/delete_monitor/<monitor_id>")
-def delete_monitor(monitor_id):
-    if 'user_id' in session:
-        if monitor_id in monitors:
-            del monitors[monitor_id]
-        return redirect(url_for("home"))
-    return redirect(url_for("login"))
+    return render_template_string(HTML_TEMPLATE, groups=groups)
 
 if __name__ == "__main__":
-    monitor_thread = threading.Thread(target=monitor_and_recover)
-    monitor_thread.daemon = True
-    monitor_thread.start()
-    
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5000, debug=True)
