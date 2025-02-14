@@ -1,116 +1,124 @@
-from flask import Flask, render_template, request, redirect, url_for, session
-from datetime import datetime
-import os
-import json
-import time
-import random
-import requests
+from flask import Flask, request
 import threading
+import time
+import subprocess
+import requests
+import re
 
 app = Flask(__name__)
-app.secret_key = os.urandom(24)
 
-monitors = {}
+# Store monitored URLs and scripts
+monitors = []
 
-# A mock function to check if server is up or not
-def monitor_link(url):
-    try:
-        response = requests.get(url)
-        if response.status_code in range(200, 701):
-            return True
-        else:
-            return False
-    except Exception as e:
-        print(f"Error: {e}")
-        return False
-
-# Function to handle monitoring with auto-recovery
-def monitor_and_recover():
+# Function to check URL status & auto-restart script if down
+def monitor_replit(url, script, index):
+    start_time = time.time()
     while True:
-        for uid, monitor_data in monitors.items():
-            url = monitor_data["url"]
-            if not monitor_link(url):
-                monitors[uid]["status"] = "Down"
-                print(f"Monitor {uid} is Down. Trying to recover...")
-                # Simulating recovery action
-                time.sleep(60)
-                monitors[uid]["status"] = "Up"
-                print(f"Monitor {uid} is back Up!")
-        time.sleep(180)  # Check every 3 minutes
-
-@app.route("/")
-def home():
-    if 'user_id' in session:
-        return render_template("index.html", monitors=monitors)
-    return redirect(url_for("login"))
-
-@app.route("/login", methods=["GET", "POST"])
-def login():
-    if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
-        if username == "admin" and password == "password":  # Placeholder for actual authentication
-            session['user_id'] = username
-            return redirect(url_for("home"))
+        try:
+            response = requests.get(url, timeout=10)
+            status_code = response.status_code
+        except:
+            status_code = 0  # Down hai
+        
+        if 200 <= status_code <= 600:
+            server_status = "🟢 UP"
         else:
-            return "Invalid credentials, please try again."
-    return render_template("login.html")
+            server_status = "🔴 DOWN"
+            subprocess.run(["python3", script], check=False)  # Auto Restart
 
-@app.route("/signup", methods=["GET", "POST"])
-def signup():
-    if request.method == "POST":
-        username = request.form["username"]
-        password = request.form["password"]
-        # Here, you would save the username and password (preferably in a database)
-        # For simplicity, let's assume you just print them to console
-        print(f"New User Registered: {username}, {password}")
-        # After registration, you can automatically log in the user or redirect to login
-        return redirect(url_for("login"))
-    return render_template("signup.html")
+        uptime_days = int((time.time() - start_time) / 86400)  # Days uptime
 
-@app.route("/logout")
-def logout():
-    session.pop('user_id', None)
-    return redirect(url_for("login"))
+        monitors[index]["status"] = server_status
+        monitors[index]["uptime"] = uptime_days
+        monitors[index]["status_code"] = status_code
 
-@app.route("/add_monitor", methods=["POST"])
+        time.sleep(60)  # Har 1 min me check karega
+
+# Route to add new URL & script
+@app.route('/add', methods=['POST'])
 def add_monitor():
-    if 'user_id' in session:
-        url = request.form["url"]
-        friendly_name = request.form["friendly_name"]
-        monitor_id = str(random.randint(1000, 9999))
-        monitors[monitor_id] = {
-            "url": url,
-            "status": "Up",
-            "name": friendly_name,
-            "created_at": str(datetime.now())
-        }
-        return redirect(url_for("home"))
-    return redirect(url_for("login"))
-
-@app.route("/edit_monitor/<monitor_id>", methods=["GET", "POST"])
-def edit_monitor(monitor_id):
-    if 'user_id' in session:
-        if request.method == "POST":
-            url = request.form["url"]
-            friendly_name = request.form["friendly_name"]
-            monitors[monitor_id]["url"] = url
-            monitors[monitor_id]["name"] = friendly_name
-            return redirect(url_for("home"))
-        return render_template("edit_monitor.html", monitor=monitors[monitor_id])
-    return redirect(url_for("login"))
-
-@app.route("/delete_monitor/<monitor_id>")
-def delete_monitor(monitor_id):
-    if 'user_id' in session:
-        if monitor_id in monitors:
-            del monitors[monitor_id]
-        return redirect(url_for("home"))
-    return redirect(url_for("login"))
-
-if __name__ == "__main__":
-    monitor_thread = threading.Thread(target=monitor_and_recover)
-    monitor_thread.daemon = True
-    monitor_thread.start()
+    url = request.form['url']
+    script = request.form['script']
     
-    app.run(debug=True, host="0.0.0.0", port=5000)
+    # ✅ **Check if URL follows Replit format**
+    if not re.match(r"https://.*\.replit\.dev", url):
+        return "<script>alert('❌ Error: Only replit.dev URLs are allowed!'); window.location.href='/'</script>"
+    
+    monitor = {
+        "index": len(monitors) + 1,
+        "url": url,
+        "script": script,
+        "status": "Checking...",
+        "uptime": 0,
+        "status_code": "N/A"
+    }
+    monitors.append(monitor)
+    
+    # Start monitoring in background
+    thread = threading.Thread(target=monitor_replit, args=(url, script, len(monitors) - 1))
+    thread.daemon = True
+    thread.start()
+    
+    return "<script>window.location.href='/'</script>"
+
+# Web UI
+@app.route('/')
+def index():
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Replit Auto Monitor</title>
+        <style>
+            body {{
+                font-family: Arial, sans-serif;
+                text-align: center;
+                background-color: black;
+                color: white;
+            }}
+            table {{
+                width: 90%;
+                margin: auto;
+                border-collapse: collapse;
+                margin-top: 20px;
+                background-color: #222;
+            }}
+            th, td {{
+                border: 1px solid white;
+                padding: 10px;
+            }}
+            .up {{ color: green; }}
+            .down {{ color: red; }}
+        </style>
+    </head>
+    <body>
+        <h1>Replit Auto Monitor</h1>
+        <form action="/add" method="post">
+            <label>Replit URL:</label>
+            <input type="text" name="url" required placeholder="https://your-replit.replit.dev">
+            <label>Replit Script Path:</label>
+            <input type="text" name="script" required placeholder="your_script.py">
+            <button type="submit">Add Monitor</button>
+        </form>
+
+        <h2>Monitored URLs</h2>
+        <table>
+            <tr>
+                <th>#</th>
+                <th>Replit URL</th>
+                <th>Status</th>
+                <th>Uptime (Days)</th>
+                <th>Status Code</th>
+                <th>Script</th>
+            </tr>
+            {"".join([
+                f"<tr><td>{m['index']}</td><td>{m['url']}</td><td class='{'up' if m['status'] == '🟢 UP' else 'down'}'>{m['status']}</td><td>{m['uptime']}</td><td>{m['status_code']}</td><td>{m['script']}</td></tr>"
+                for m in monitors
+            ])}
+        </table>
+    </body>
+    </html>
+    """
+
+if __name__ == '__main__':
+    app.run(host="0.0.0.0", port=5000, debug=True)
