@@ -2,15 +2,8 @@ from flask import Flask, render_template_string, request
 
 app = Flask(__name__)
 
-# Simulated database for group and admin data
-groups_db = {
-    "group1_uid": {
-        "name": "Original Group Name",
-        "nickname": "Original Nickname",
-        "locked": True,
-        "admin_uid": "admin_uid_1"
-    }
-}
+# Simulated database for group and admin data (This can be replaced with an actual database in production)
+groups_db = {}
 
 @app.route('/', methods=['GET', 'POST'])
 def home():
@@ -21,9 +14,15 @@ def home():
         new_nickname = request.form['new_nickname']
         action = request.form['action']
 
-        # Check if group exists
+        # Check if group exists in the database
         if group_uid not in groups_db:
-            return "Group UID not found!"
+            # If group does not exist, create a new group entry
+            groups_db[group_uid] = {
+                "name": new_name,
+                "nickname": new_nickname,
+                "locked": False,
+                "admin_uid": admin_uid
+            }
 
         group = groups_db[group_uid]
 
