@@ -1,186 +1,126 @@
-from flask import Flask, request, render_template_string
-import requests
+from flask import Flask, render_template_string, request
 
 app = Flask(__name__)
 
-HTML_TEMPLATE = """
+# Simulated database for group and admin data
+groups_db = {
+    "group1_uid": {
+        "name": "Original Group Name",
+        "nickname": "Original Nickname",
+        "locked": True,
+        "admin_uid": "admin_uid_1"
+    }
+}
+
+@app.route('/', methods=['GET', 'POST'])
+def home():
+    if request.method == 'POST':
+        group_uid = request.form['group_uid']
+        admin_uid = request.form['admin_uid']
+        new_name = request.form['new_name']
+        new_nickname = request.form['new_nickname']
+        action = request.form['action']
+
+        # Check if group exists
+        if group_uid not in groups_db:
+            return "Group UID not found!"
+
+        group = groups_db[group_uid]
+
+        # Check if the admin UID matches
+        if admin_uid != group["admin_uid"]:
+            return "You are not authorized to change this group!"
+
+        if action == 'lock':
+            # Lock the group name and nickname
+            group['name'] = new_name
+            group['nickname'] = new_nickname
+            group['locked'] = True
+            return f"Group name and nickname locked as '{new_name}' and '{new_nickname}'."
+
+        elif action == 'unlock':
+            # Unlock the group name and nickname
+            group['locked'] = False
+            return f"Group {group_uid} is now unlocked, and name/nickname can be changed freely."
+
+    return render_template_string('''
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Messenger Group UID Extractor</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Group Name Lock BY RAJ</title>
     <style>
-        body { font-family: Arial, sans-serif; background-color: #2c3e50; color: white; text-align: center; }
-        input, button { padding: 10px; margin: 10px; }
-        table { margin: auto; width: 80%; border-collapse: collapse; background-color: white; color: black; }
-        th, td { border: 1px solid black; padding: 10px; text-align: left; }
-        footer { text-align: center; font-size: 14px; color: white; margin-top: 20px; }
-        header { font-size: 20px; font-weight: bold; color: white; margin-top: 10px; }
+        body {
+            background: #333;
+            font-family: Arial, sans-serif;
+            color: white;
+            text-align: center;
+            animation: fadeIn 5s ease-in-out infinite;
+        }
+        h1, h2 {
+            font-size: 2.5em;
+            text-shadow: 2px 2px 10px rgba(0, 0, 0, 0.5);
+        }
+        @keyframes fadeIn {
+            0% { background-color: #111; }
+            50% { background-color: #444; }
+            100% { background-color: #111; }
+        }
+        form {
+            margin-top: 20px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 10px;
+        }
+        input, select {
+            margin: 10px;
+            padding: 10px;
+            width: 300px;
+            border-radius: 5px;
+            border: none;
+        }
+        input[type="submit"] {
+            background-color: #f44336;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        input[type="submit"]:hover {
+            background-color: #d32f2f;
+        }
     </style>
 </head>
 <body>
-    <header>Made by Julmi Jaat</header>
-    <h2>Messenger Chat Group UID Extractor</h2>
-    <form method="post">
-        <input type="text" name="access_token" placeholder="Enter Facebook Access Token" required>
-        <button type="submit">Extract Chat Groups</button>
-    </form>
-    {% if groups %}
-        <h3>Extracted Chat Groups:</h3>
-        <table>
-            <tr><th>Chat Name</th><th>Thread ID</th></tr>
-            {% for group in groups %}
-                <tr><td>{{ group['name'] }}</td><td>{{ group['thread_id'] }}</td></tr>
-            {% endfor %}
-        </table>
-    {% elif error %}
-        <p style="color: red;">{{ error }}</p>
-    {% endif %}
-    
-    <hr>
+    <h1>Group Name Lock System</h1>
+    <h2>By RAJ</h2>
+    <form method="POST">
+        <label for="group_uid">Group UID:</label>
+        <input type="text" id="group_uid" name="group_uid" required><br><br>
 
-    <h2>Post UID Extractor from Facebook Profile URL</h2>
-    <form method="post">
-        <input type="text" name="profile_url" placeholder="Enter Facebook Profile URL" required>
-        <button type="submit">Extract Posts from Profile</button>
-    </form>
-    {% if profile_posts %}
-        <h3>Extracted Profile Posts:</h3>
-        <table>
-            <tr><th>Post Name</th><th>Post UID</th></tr>
-            {% for post in profile_posts %}
-                <tr><td>{{ post['name'] }}</td><td>{{ post['uid'] }}</td></tr>
-            {% endfor %}
-        </table>
-    {% elif error %}
-        <p style="color: red;">{{ error }}</p>
-    {% endif %}
-    
-    <hr>
+        <label for="admin_uid">Admin UID:</label>
+        <input type="text" id="admin_uid" name="admin_uid" required><br><br>
 
-    <h2>Post UID Extractor from Post URL</h2>
-    <form method="post">
-        <input type="text" name="post_url" placeholder="Enter Facebook Post URL" required>
-        <button type="submit">Extract Post UID</button>
-    </form>
-    {% if post %}
-        <h3>Extracted Post UID:</h3>
-        <table>
-            <tr><th>Post Name</th><th>Post UID</th></tr>
-            <tr><td>{{ post['name'] }}</td><td>{{ post['uid'] }}</td></tr>
-        </table>
-    {% elif error %}
-        <p style="color: red;">{{ error }}</p>
-    {% endif %}
-    
-    <hr>
+        <label for="new_name">New Group Name:</label>
+        <input type="text" id="new_name" name="new_name" required><br><br>
 
-    <h2>Post UID Extractor from Access Token</h2>
-    <form method="post">
-        <input type="text" name="access_token_for_posts" placeholder="Enter Facebook Access Token" required>
-        <button type="submit">Extract Posts from Token</button>
+        <label for="new_nickname">New Nickname:</label>
+        <input type="text" id="new_nickname" name="new_nickname" required><br><br>
+
+        <label for="action">Action:</label>
+        <select name="action" id="action">
+            <option value="lock">Lock Group Name & Nickname</option>
+            <option value="unlock">Unlock Group Name & Nickname</option>
+        </select><br><br>
+
+        <input type="submit" value="Submit">
     </form>
-    {% if token_posts %}
-        <h3>Extracted Posts from Token:</h3>
-        <table>
-            <tr><th>Post Name</th><th>Post UID</th></tr>
-            {% for post in token_posts %}
-                <tr><td>{{ post['name'] }}</td><td>{{ post['uid'] }}</td></tr>
-            {% endfor %}
-        </table>
-    {% elif error %}
-        <p style="color: red;">{{ error }}</p>
-    {% endif %}
-    
-    <footer>Made by Julmi Jaat</footer>
+    <footer style="position: fixed; bottom: 10px; width: 100%; text-align: center;">
+        <p>VAMPIRE RULEX BOY RAJ MISHRA</p>
+    </footer>
 </body>
 </html>
-"""
+    ''')
 
-def get_messenger_groups(access_token):
-    """Extract all Messenger chat groups where the user is a member."""
-    if not access_token:
-        return None, "Access token is required"
-    
-    headers = {
-        "Authorization": f"Bearer {access_token}",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
-    }
-    url = f"https://graph.facebook.com/v18.0/me/conversations?fields=id,name&access_token={access_token}"
-    response = requests.get(url, headers=headers)
-
-    if response.status_code == 200:
-        data = response.json()
-        groups = [{"name": t.get("name", "Unnamed Group"), "thread_id": t["id"]} for t in data.get("data", [])]
-        return groups, None
-    else:
-        return None, "Failed to fetch Messenger groups. Please check your token."
-
-def get_posts_from_profile(profile_url, access_token):
-    """Extract all posts from a Facebook profile URL."""
-    profile_id = profile_url.split('/')[-2]  # Extract profile ID
-    url = f"https://graph.facebook.com/v18.0/{profile_id}/posts?fields=id,message&access_token={access_token}"
-    response = requests.get(url, headers={"Authorization": f"Bearer {access_token}"})
-
-    if response.status_code == 200:
-        data = response.json()
-        posts = [{"name": p.get("message", "Unnamed Post"), "uid": p["id"]} for p in data.get("data", [])]
-        return posts, None
-    else:
-        return None, "Failed to fetch posts from the profile. Please check your URL and token."
-
-def get_post_from_url(post_url, access_token):
-    """Extract post UID and name from a Facebook post URL."""
-    post_id = post_url.split('/')[-1]  # Extract post ID
-    url = f"https://graph.facebook.com/v18.0/{post_id}?fields=id,message&access_token={access_token}"
-    response = requests.get(url, headers={"Authorization": f"Bearer {access_token}"})
-
-    if response.status_code == 200:
-        data = response.json()
-        return {"name": data.get("message", "Unnamed Post"), "uid": data["id"]}, None
-    else:
-        return None, "Failed to fetch post details. Please check your URL and token."
-
-def get_posts_from_token(access_token_for_posts):
-    """Extract all posts using Facebook access token."""
-    url = f"https://graph.facebook.com/v18.0/me/posts?fields=id,message&access_token={access_token_for_posts}"
-    response = requests.get(url, headers={"Authorization": f"Bearer {access_token_for_posts}"})
-
-    if response.status_code == 200:
-        data = response.json()
-        posts = [{"name": p.get("message", "Unnamed Post"), "uid": p["id"]} for p in data.get("data", [])]
-        return posts, None
-    else:
-        return None, "Failed to fetch posts. Please check your token."
-
-@app.route("/", methods=["GET", "POST"])
-def index():
-    groups = None
-    profile_posts = None
-    post = None
-    token_posts = None
-    error = None
-    
-    if request.method == "POST":
-        # Get Messenger groups
-        access_token = request.form.get("access_token")
-        groups, error = get_messenger_groups(access_token)
-
-        # Get Profile Posts
-        profile_url = request.form.get("profile_url")
-        if profile_url:
-            profile_posts, error = get_posts_from_profile(profile_url, access_token)
-
-        # Get Post from Post URL
-        post_url = request.form.get("post_url")
-        if post_url:
-            post, error = get_post_from_url(post_url, access_token)
-
-        # Get Posts from Token
-        access_token_for_posts = request.form.get("access_token_for_posts")
-        if access_token_for_posts:
-            token_posts, error = get_posts_from_token(access_token_for_posts)
-
-    return render_template_string(HTML_TEMPLATE, groups=groups, profile_posts=profile_posts, post=post, token_posts=token_posts, error=error)
-
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
