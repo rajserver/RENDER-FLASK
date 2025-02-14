@@ -1,124 +1,203 @@
-from flask import Flask, request
-import threading
+from flask import Flask, render_template_string, request
+from twilio.rest import Client
+import random
 import time
-import subprocess
-import requests
-import re
+import threading
+import os
+import logging
 
 app = Flask(__name__)
 
-# Store monitored URLs and scripts
-monitors = []
+# File upload folder
+app.config['UPLOAD_FOLDER'] = 'uploads/'
+app.config['ALLOWED_EXTENSIONS'] = {'txt', 'csv'}
 
-# Function to check URL status & auto-restart script if down
-def monitor_replit(url, script, index):
-    start_time = time.time()
-    while True:
-        try:
-            response = requests.get(url, timeout=10)
-            status_code = response.status_code
-        except:
-            status_code = 0  # Down hai
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+
+# Dummy Twilio SID and Auth Token (Replace with actual credentials manually)
+account_sid = os.getenv('TWILIO_ACCOUNT_SID')  # Environment variable se Twilio SID
+auth_token = os.getenv('TWILIO_AUTH_TOKEN')  # Environment variable se Twilio Auth Token
+twilio_number = os.getenv('TWILIO_NUMBER')  # WhatsApp sandbox number, set from environment
+
+client = Client(account_sid, auth_token)
+
+# Stop flags for controlling the message sending for specific contact or group
+stop_contact_flag = None
+stop_group_flag = None
+
+# Function to randomize message content from the specific file (File.txt)
+def randomize_message():
+    try:
+        # Check if the file exists
+        message_file = os.path.join(app.config['UPLOAD_FOLDER'], 'File.txt')
+        if not os.path.exists(message_file):
+            logging.error("File.txt not found!")
+            return "Error: File.txt not found!"  # Default error message
         
-        if 200 <= status_code <= 600:
-            server_status = "🟢 UP"
-        else:
-            server_status = "🔴 DOWN"
-            subprocess.run(["python3", script], check=False)  # Auto Restart
+        with open(message_file, 'r') as file:
+            messages = file.readlines()
+        return random.choice(messages).strip()  # Randomly choose one message
+    except Exception as e:
+        logging.error(f"Error reading message file: {e}")
+        return "Hello, this is a test message."  # Default message if file read fails
 
-        uptime_days = int((time.time() - start_time) / 86400)  # Days uptime
+# Function to send a message with random delay
+def send_message(to_number, message, sender_number):
+    global stop_contact_flag, stop_group_flag
+    # Add a random delay before sending each message
+    delay = random.uniform(3, 5)  # Random delay between 3 and 5 seconds
+    time.sleep(delay)
 
-        monitors[index]["status"] = server_status
-        monitors[index]["uptime"] = uptime_days
-        monitors[index]["status_code"] = status_code
+    # Stop the sending process if stop flag for contact or group is set
+    if stop_contact_flag == to_number:
+        logging.info(f"Message sending stopped for contact {to_number}.")
+        return
 
-        time.sleep(60)  # Har 1 min me check karega
+    if stop_group_flag == to_number:
+        logging.info(f"Message sending stopped for group {to_number}.")
+        return
 
-# Route to add new URL & script
-@app.route('/add', methods=['POST'])
-def add_monitor():
-    url = request.form['url']
-    script = request.form['script']
-    
-    # ✅ **Check if URL follows Replit format**
-    if not re.match(r"https://.*\.replit\.dev", url):
-        return "<script>alert('❌ Error: Only replit.dev URLs are allowed!'); window.location.href='/'</script>"
-    
-    monitor = {
-        "index": len(monitors) + 1,
-        "url": url,
-        "script": script,
-        "status": "Checking...",
-        "uptime": 0,
-        "status_code": "N/A"
-    }
-    monitors.append(monitor)
-    
-    # Start monitoring in background
-    thread = threading.Thread(target=monitor_replit, args=(url, script, len(monitors) - 1))
-    thread.daemon = True
-    thread.start()
-    
-    return "<script>window.location.href='/'</script>"
+    # Send message via Twilio
+    client.messages.create(
+        body=message,
+        from_=f'whatsapp:{sender_number}',
+        to=f'whatsapp:{to_number}'
+    )
+    logging.info(f"Message sent from {sender_number} to {to_number} with delay: {delay:.2f} seconds")
 
-# Web UI
-@app.route('/')
+# Function to generate token automatically (This is just a placeholder for actual logic)
+def generate_twilio_token(user_number):
+    # Normally, Twilio doesn't generate tokens like this.
+    # You would need to integrate OAuth or use Twilio's API with your SID and Auth Token
+    logging.info(f"Generating Twilio token for {user_number}...")
+    # Placeholder logic: Replace with real logic or manual step
+    return account_sid, auth_token, twilio_number
+
+# Route for the homepage and form submission
+@app.route('/', methods=['GET', 'POST'])
 def index():
-    return f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>Replit Auto Monitor</title>
-        <style>
-            body {{
-                font-family: Arial, sans-serif;
-                text-align: center;
-                background-color: black;
-                color: white;
-            }}
-            table {{
-                width: 90%;
-                margin: auto;
-                border-collapse: collapse;
-                margin-top: 20px;
-                background-color: #222;
-            }}
-            th, td {{
-                border: 1px solid white;
-                padding: 10px;
-            }}
-            .up {{ color: green; }}
-            .down {{ color: red; }}
-        </style>
-    </head>
-    <body>
-        <h1>Replit Auto Monitor</h1>
-        <form action="/add" method="post">
-            <label>Replit URL:</label>
-            <input type="text" name="url" required placeholder="https://your-replit.replit.dev">
-            <label>Replit Script Path:</label>
-            <input type="text" name="script" required placeholder="your_script.py">
-            <button type="submit">Add Monitor</button>
-        </form>
+    global stop_contact_flag, stop_group_flag
 
-        <h2>Monitored URLs</h2>
-        <table>
-            <tr>
-                <th>#</th>
-                <th>Replit URL</th>
-                <th>Status</th>
-                <th>Uptime (Days)</th>
-                <th>Status Code</th>
-                <th>Script</th>
-            </tr>
-            {"".join([
-                f"<tr><td>{m['index']}</td><td>{m['url']}</td><td class='{'up' if m['status'] == '🟢 UP' else 'down'}'>{m['status']}</td><td>{m['uptime']}</td><td>{m['status_code']}</td><td>{m['script']}</td></tr>"
-                for m in monitors
-            ])}
-        </table>
-    </body>
-    </html>
-    """
+    if request.method == 'POST':
+        if request.form.get('action') == 'stop_contact':
+            stop_contact_flag = request.form.get('contact_number')  # Stop sending messages to specific contact
+            stop_group_flag = None  # Clear group flag if contact stop is selected
+            logging.info(f"Stop message sending for contact: {stop_contact_flag}")
+            return render_template_string(html_template, message=f"Message sending stopped for contact {stop_contact_flag}!")
+
+        elif request.form.get('action') == 'stop_group':
+            stop_group_flag = request.form.get('group_uid')  # Stop sending messages to specific group
+            stop_contact_flag = None  # Clear contact flag if group stop is selected
+            logging.info(f"Stop message sending for group: {stop_group_flag}")
+            return render_template_string(html_template, message=f"Message sending stopped for group {stop_group_flag}!")
+
+        # Reset the stop flags when starting to send messages
+        stop_contact_flag = None
+        stop_group_flag = None
+        
+        user_number = request.form.get('sender_number')
+        
+        # Generate Twilio credentials (fake logic here, please replace with actual token generation mechanism)
+        account_sid, auth_token, twilio_number = generate_twilio_token(user_number)
+
+        # Save the generated credentials to be used later
+        # In production, you should store these in a safe place (e.g., a database or secure vault)
+        
+        recipients = request.form.get('recipients').split(',')
+        message_limit = int(request.form.get('message_limit'))
+        message_interval = int(request.form.get('message_interval')) * 60  # Convert minutes to seconds
+        sender_number = user_number.strip()
+
+        # Function to send messages
+        def send_messages():
+            sent_count = 0
+            message_status = {}  # Dictionary to track sent messages per recipient
+            
+            for recipient in recipients:
+                if recipient not in message_status:
+                    message_status[recipient] = 0  # Initialize message count for recipient
+
+                while sent_count < message_limit:
+                    # Stop the sending process if stop flag is set
+                    if stop_contact_flag == recipient or stop_group_flag == recipient:
+                        logging.info(f"Message sending stopped for {recipient}.")
+                        break
+
+                    message = randomize_message()  # Randomize the message content
+                    send_message(recipient.strip(), message, sender_number)
+                    sent_count += 1
+                    message_status[recipient] += 1  # Increment the message count for the recipient
+
+                    # Check if the message limit is reached
+                    if sent_count >= message_limit:
+                        logging.info("Message limit reached.")
+                        break
+
+                    # Wait for the set interval before sending next message
+                    time.sleep(message_interval)
+
+            # Check if limit was exceeded for any recipient
+            for recipient, count in message_status.items():
+                if count >= 5:
+                    logging.error(f"Failure: Unable to send more messages to {recipient}, limit exceeded.")
+
+        # Start sending messages in a separate thread
+        threading.Thread(target=send_messages).start()
+
+        return render_template_string(html_template, message="Messages are being sent!")
+
+    return render_template_string(html_template, message=None)
+
+# Helper function to check if the uploaded file is allowed
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ALLOWED_EXTENSIONS']
+
+# HTML Template
+html_template = '''
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Message Sender - Flask</title>
+</head>
+<body style="background-color:#f0f0f0; font-family: Arial, sans-serif; padding: 20px;">
+    <h1>Message Sender by Raj Mishra</h1>
+    <form method="POST">
+        <h3>Stop Message Sending</h3>
+        <label for="contact_number">Enter Contact Number to Stop:</label>
+        <input type="text" id="contact_number" name="contact_number" placeholder="Enter contact number">
+        <button type="submit" name="action" value="stop_contact">Stop for Contact</button>
+    </form>
+
+    <form method="POST">
+        <label for="group_uid">Enter Group UID to Stop:</label>
+        <input type="text" id="group_uid" name="group_uid" placeholder="Enter group UID">
+        <button type="submit" name="action" value="stop_group">Stop for Group</button>
+    </form>
+
+    <h3>Send Messages</h3>
+    <form method="POST">
+        <label for="sender_number">Enter Your Number (WhatsApp):</label>
+        <input type="text" id="sender_number" name="sender_number" placeholder="e.g. +1234567890" required><br><br>
+
+        <label for="recipients">Enter Recipients (comma separated):</label>
+        <input type="text" id="recipients" name="recipients" placeholder="e.g. +1234567890,+0987654321" required><br><br>
+
+        <label for="message_limit">Message Limit:</label>
+        <input type="number" id="message_limit" name="message_limit" placeholder="e.g. 10" required><br><br>
+
+        <label for="message_interval">Message Interval (minutes):</label>
+        <input type="number" id="message_interval" name="message_interval" placeholder="e.g. 2" required><br><br>
+
+        <button type="submit">Start Sending Messages</button>
+    </form>
+
+    <p>{{ message }}</p>
+</body>
+</html>
+'''
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(debug=True, host='0.0.0.0', port=5000)  # Running on all IPs of the local machine
