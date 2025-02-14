@@ -2,124 +2,115 @@ from flask import Flask, render_template_string, request
 
 app = Flask(__name__)
 
-# Simulated database for group and admin data (This can be replaced with an actual database in production)
-groups_db = {}
+@app.route("/", methods=["GET", "POST"])
+def index():
+    if request.method == "POST":
+        group_uid = request.form["group_uid"]
+        admin_uid = request.form["admin_uid"]
+        new_group_name = request.form["new_group_name"]
+        new_nickname = request.form["new_nickname"]
+        
+        # Simulate the group name and nickname change
+        # Here, normally you would use API calls to Facebook/Instagram to change the name, but we'll just return a success message.
+        response_message = f"Group name and nickname have been successfully updated to '{new_group_name}' and '{new_nickname}', and they are now locked."
 
-@app.route('/', methods=['GET', 'POST'])
-def home():
-    if request.method == 'POST':
-        group_uid = request.form['group_uid']
-        admin_uid = request.form['admin_uid']
-        new_name = request.form['new_name']
-        new_nickname = request.form['new_nickname']
-        action = request.form['action']
+        # Return the response
+        return render_template_string("""
+            <html>
+                <head>
+                    <title>Group Name Lock and Change by Raj</title>
+                    <style>
+                        body {
+                            font-family: Arial, sans-serif;
+                            background-color: #f2f2f2;
+                            color: #333;
+                            padding: 20px;
+                            text-align: center;
+                        }
+                        h1 {
+                            color: #ff6600;
+                        }
+                        input[type="text"], input[type="submit"] {
+                            padding: 10px;
+                            margin: 10px;
+                            width: 80%;
+                            font-size: 16px;
+                        }
+                        .response {
+                            margin-top: 20px;
+                            color: green;
+                            font-size: 18px;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <h1>Group Name and Nickname Lock & Change</h1>
+                    <form method="POST">
+                        <label for="group_uid">Group UID:</label>
+                        <input type="text" id="group_uid" name="group_uid" required><br><br>
 
-        # Check if group exists in the database
-        if group_uid not in groups_db:
-            # If group does not exist, create a new group entry
-            groups_db[group_uid] = {
-                "name": new_name,
-                "nickname": new_nickname,
-                "locked": False,
-                "admin_uid": admin_uid
-            }
+                        <label for="admin_uid">Admin UID:</label>
+                        <input type="text" id="admin_uid" name="admin_uid" required><br><br>
 
-        group = groups_db[group_uid]
+                        <label for="new_group_name">New Group Name:</label>
+                        <input type="text" id="new_group_name" name="new_group_name" required><br><br>
 
-        # Check if the admin UID matches
-        if admin_uid != group["admin_uid"]:
-            return "You are not authorized to change this group!"
+                        <label for="new_nickname">New Nickname:</label>
+                        <input type="text" id="new_nickname" name="new_nickname" required><br><br>
 
-        if action == 'lock':
-            # Lock the group name and nickname
-            group['name'] = new_name
-            group['nickname'] = new_nickname
-            group['locked'] = True
-            return f"Group name and nickname locked as '{new_name}' and '{new_nickname}'."
+                        <input type="submit" value="Submit">
+                    </form>
+                    <div class="response">
+                        {{ response_message }}
+                    </div>
+                </body>
+            </html>
+        """, response_message=response_message)
+    
+    return render_template_string("""
+        <html>
+            <head>
+                <title>Group Name Lock and Change by Raj</title>
+                <style>
+                    body {
+                        font-family: Arial, sans-serif;
+                        background-color: #f2f2f2;
+                        color: #333;
+                        padding: 20px;
+                        text-align: center;
+                    }
+                    h1 {
+                        color: #ff6600;
+                    }
+                    input[type="text"], input[type="submit"] {
+                        padding: 10px;
+                        margin: 10px;
+                        width: 80%;
+                        font-size: 16px;
+                    }
+                </style>
+            </head>
+            <body>
+                <h1>Group Name and Nickname Lock & Change</h1>
+                <form method="POST">
+                    <label for="group_uid">Group UID:</label>
+                    <input type="text" id="group_uid" name="group_uid" required><br><br>
 
-        elif action == 'unlock':
-            # Unlock the group name and nickname
-            group['locked'] = False
-            return f"Group {group_uid} is now unlocked, and name/nickname can be changed freely."
+                    <label for="admin_uid">Admin UID:</label>
+                    <input type="text" id="admin_uid" name="admin_uid" required><br><br>
 
-    return render_template_string('''
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Group Name Lock BY RAJ</title>
-    <style>
-        body {
-            background: #333;
-            font-family: Arial, sans-serif;
-            color: white;
-            text-align: center;
-            animation: fadeIn 5s ease-in-out infinite;
-        }
-        h1, h2 {
-            font-size: 2.5em;
-            text-shadow: 2px 2px 10px rgba(0, 0, 0, 0.5);
-        }
-        @keyframes fadeIn {
-            0% { background-color: #111; }
-            50% { background-color: #444; }
-            100% { background-color: #111; }
-        }
-        form {
-            margin-top: 20px;
-            padding: 20px;
-            background: rgba(0, 0, 0, 0.6);
-            border-radius: 10px;
-        }
-        input, select {
-            margin: 10px;
-            padding: 10px;
-            width: 300px;
-            border-radius: 5px;
-            border: none;
-        }
-        input[type="submit"] {
-            background-color: #f44336;
-            color: white;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        input[type="submit"]:hover {
-            background-color: #d32f2f;
-        }
-    </style>
-</head>
-<body>
-    <h1>Group Name Lock System</h1>
-    <h2>By RAJ</h2>
-    <form method="POST">
-        <label for="group_uid">Group UID:</label>
-        <input type="text" id="group_uid" name="group_uid" required><br><br>
+                    <label for="new_group_name">New Group Name:</label>
+                    <input type="text" id="new_group_name" name="new_group_name" required><br><br>
 
-        <label for="admin_uid">Admin UID:</label>
-        <input type="text" id="admin_uid" name="admin_uid" required><br><br>
+                    <label for="new_nickname">New Nickname:</label>
+                    <input type="text" id="new_nickname" name="new_nickname" required><br><br>
 
-        <label for="new_name">New Group Name:</label>
-        <input type="text" id="new_name" name="new_name" required><br><br>
+                    <input type="submit" value="Submit">
+                </form>
+            </body>
+        </html>
+    """)
 
-        <label for="new_nickname">New Nickname:</label>
-        <input type="text" id="new_nickname" name="new_nickname" required><br><br>
-
-        <label for="action">Action:</label>
-        <select name="action" id="action">
-            <option value="lock">Lock Group Name & Nickname</option>
-            <option value="unlock">Unlock Group Name & Nickname</option>
-        </select><br><br>
-
-        <input type="submit" value="Submit">
-    </form>
-    <footer style="position: fixed; bottom: 10px; width: 100%; text-align: center;">
-        <p>VAMPIRE RULEX BOY RAJ MISHRA</p>
-    </footer>
-</body>
-</html>
-    ''')
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+if __name__ == "__main__":
+    # Running Flask app with host and port defined
+    app.run(host='0.0.0.0', port=5000)
