@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitor Dashboard</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f7f7f7;
+        }
+        .monitor-card {
+            margin: 10px 0;
+            padding: 15px;
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .monitor-name {
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .monitor-uptime {
+            color: #007bff;
+        }
+        .card-body {
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1 class="text-center my-4">Monitor Dashboard - By Raj Mishra</h1>
+    <div class="row">
+        {% for monitor in monitors %}
+        <div class="col-md-4">
+            <div class="monitor-card">
+                <div class="monitor-name">{{ monitor['name'] }}</div>
+                <div class="monitor-uptime">Uptime: {{ monitor['uptime'] }} days</div>
+                <div class="card-body">
+                    <a href="{{ monitor['link'] }}" class="btn btn-primary btn-block" target="_blank">Open Monitor</a>
+                    <a href="{{ url_for('edit_monitor', monitor_id=monitor['id']) }}" class="btn btn-warning btn-block my-2">Edit</a>
+                    <a href="{{ url_for('delete_monitor', monitor_id=monitor['id']) }}" class="btn btn-danger btn-block">Delete</a>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.2/dist/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+
+</body>
+</html>
