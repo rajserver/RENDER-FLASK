@@ -10,7 +10,19 @@ import threading
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
 
-monitors = {}
+# Persistent file-based storage for monitors
+def load_monitors():
+    if os.path.exists('monitors.json'):
+        with open('monitors.json', 'r') as f:
+            return json.load(f)
+    return {}
+
+def save_monitors():
+    with open('monitors.json', 'w') as f:
+        json.dump(monitors, f)
+
+# Load monitors from file
+monitors = load_monitors()
 
 # A mock function to check if server is up or not
 def monitor_link(url):
@@ -32,9 +44,11 @@ def monitor_and_recover():
             if not monitor_link(url):
                 monitors[uid]["status"] = "Down"
                 print(f"Monitor {uid} is Down. Trying to recover...")
+                save_monitors()
                 # Simulating recovery action
                 time.sleep(60)
                 monitors[uid]["status"] = "Up"
+                save_monitors()
                 print(f"Monitor {uid} is back Up!")
         time.sleep(180)  # Check every 3 minutes
 
@@ -54,6 +68,7 @@ def add_monitor():
             "name": friendly_name,
             "created_at": str(datetime.now())
         }
+        save_monitors()
         return redirect(url_for("home"))
     return redirect(url_for("login"))
 
@@ -65,6 +80,7 @@ def edit_monitor(monitor_id):
             friendly_name = request.form["friendly_name"]
             monitors[monitor_id]["url"] = url
             monitors[monitor_id]["name"] = friendly_name
+            save_monitors()
             return redirect(url_for("home"))
         return render_template("edit_monitor.html", monitor=monitors[monitor_id])
     return redirect(url_for("login"))
@@ -74,6 +90,7 @@ def delete_monitor(monitor_id):
     if 'user_id' in session:
         if monitor_id in monitors:
             del monitors[monitor_id]
+            save_monitors()
         return redirect(url_for("home"))
     return redirect(url_for("login"))
 
