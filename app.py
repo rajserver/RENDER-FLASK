@@ -1,108 +1,100 @@
-from flask import Flask, render_template, request, redirect, url_for, session, flash
-import requests
-import time
-import threading
+from flask import Flask, render_template, request, redirect, url_for, session
 from datetime import datetime
+import os
+import json
+import time
+import random
+import requests
+import threading
 
 app = Flask(__name__)
-app.secret_key = "your_secret_key"
+app.secret_key = os.urandom(24)
 
-# Store monitored links
-monitored_links = {}
+monitors = {}
 
-# Function to monitor Render links
-def monitor_link(link, name):
-    start_time = datetime.now()
+# A mock function to check if server is up or not
+def monitor_link(url):
+    try:
+        response = requests.get(url)
+        if response.status_code in range(200, 701):
+            return True
+        else:
+            return False
+    except Exception as e:
+        print(f"Error: {e}")
+        return False
+
+# Function to handle monitoring with auto-recovery
+def monitor_and_recover():
     while True:
-        try:
-            response = requests.get(link, timeout=5)
-            status_code = response.status_code
+        for uid, monitor_data in monitors.items():
+            url = monitor_data["url"]
+            if not monitor_link(url):
+                monitors[uid]["status"] = "Down"
+                print(f"Monitor {uid} is Down. Trying to recover...")
+                # Simulating recovery action
+                time.sleep(60)
+                monitors[uid]["status"] = "Up"
+                print(f"Monitor {uid} is back Up!")
+        time.sleep(180)  # Check every 3 minutes
 
-            if 200 <= status_code <= 700:
-                uptime_duration = datetime.now() - start_time
-                monitored_links[link]["status"] = f"UP ✅ ({status_code})"
-                monitored_links[link]["uptime"] = str(uptime_duration).split(".")[0]
-            else:
-                monitored_links[link]["status"] = f"DOWN ❌ ({status_code})"
-
-            time.sleep(60)  # Check every 60 seconds
-
-        except Exception:
-            monitored_links[link]["status"] = "ERROR 🚨 (Unable to Reach)"
-            time.sleep(60)
-
-# Function to keep server active (Ping every 3 minutes)
-def keep_server_awake():
-    while True:
-        requests.get("https://your-deployed-url.onrender.com")  # Replace with actual Render URL
-        print("Pinged self to prevent sleep mode! 🔄")
-        time.sleep(180)  # Ping every 3 minutes
-
-# Homepage
-@app.route('/')
+@app.route("/")
 def home():
-    if 'email' in session:
-        return redirect(url_for('dashboard'))  # Auto redirect to Dashboard if already logged in
-    return redirect(url_for('login'))
+    return render_template("index.html", monitors=monitors)
 
-# Login Page
-@app.route('/login', methods=['GET', 'POST'])
+@app.route("/add_monitor", methods=["POST"])
+def add_monitor():
+    if 'user_id' in session:
+        url = request.form["url"]
+        friendly_name = request.form["friendly_name"]
+        monitor_id = str(random.randint(1000, 9999))
+        monitors[monitor_id] = {
+            "url": url,
+            "status": "Up",
+            "name": friendly_name,
+            "created_at": str(datetime.now())
+        }
+        return redirect(url_for("home"))
+    return redirect(url_for("login"))
+
+@app.route("/edit_monitor/<monitor_id>", methods=["GET", "POST"])
+def edit_monitor(monitor_id):
+    if 'user_id' in session:
+        if request.method == "POST":
+            url = request.form["url"]
+            friendly_name = request.form["friendly_name"]
+            monitors[monitor_id]["url"] = url
+            monitors[monitor_id]["name"] = friendly_name
+            return redirect(url_for("home"))
+        return render_template("edit_monitor.html", monitor=monitors[monitor_id])
+    return redirect(url_for("login"))
+
+@app.route("/delete_monitor/<monitor_id>")
+def delete_monitor(monitor_id):
+    if 'user_id' in session:
+        if monitor_id in monitors:
+            del monitors[monitor_id]
+        return redirect(url_for("home"))
+    return redirect(url_for("login"))
+
+@app.route("/login", methods=["GET", "POST"])
 def login():
-    if 'email' in session:  
-        return redirect(url_for('dashboard'))  # Already logged in, go to dashboard
+    if request.method == "POST":
+        username = request.form["username"]
+        password = request.form["password"]
+        if username == "admin" and password == "password":  # Placeholder for actual authentication
+            session['user_id'] = username
+            return redirect(url_for("home"))
+    return render_template("login.html")
 
-    if request.method == 'POST':
-        email = request.form['email']
-        password = request.form['password']
-        session['email'] = email  # Store login session
-        flash("Login successful!", "success")
-        return redirect(url_for('dashboard'))
-    
-    return render_template('login.html')
-
-# Sign-up Page
-@app.route('/signup', methods=['GET', 'POST'])
-def signup():
-    if request.method == 'POST':
-        email = request.form['email']
-        password = request.form['password']
-        flash('Account created successfully! Please login.', "success")
-        return redirect(url_for('login'))
-    return render_template('signup.html')
-
-# Dashboard Page (Monitoring Panel)
-@app.route('/dashboard', methods=['GET', 'POST'])
-def dashboard():
-    if 'email' not in session:
-        return redirect(url_for('login'))
-    
-    if request.method == 'POST':
-        link = request.form['link']
-        name = request.form['name']
-
-        if "render.com" not in link:
-            flash("Only Render.com links are allowed!", "danger")
-            return redirect(url_for('dashboard'))
-
-        if len(monitored_links) >= 100:
-            flash("You can only monitor up to 100 links!", "danger")
-            return redirect(url_for('dashboard'))
-
-        monitored_links[link] = {"name": name, "status": "Checking...", "uptime": "0 sec"}
-        threading.Thread(target=monitor_link, args=(link, name)).start()
-        flash(f"Monitoring started for '{name}'!", "success")
-
-    return render_template('dashboard.html', links=monitored_links)
-
-# Logout (Clears Session)
-@app.route('/logout')
+@app.route("/logout")
 def logout():
-    session.pop('email', None)
-    flash("You have been logged out!", "info")
-    return redirect(url_for('login'))
+    session.pop('user_id', None)
+    return redirect(url_for("login"))
 
-# Start pinging to keep server awake
-threading.Thread(target=keep_server_awake, daemon=True).start()
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+if __name__ == "__main__":
+    monitor_thread = threading.Thread(target=monitor_and_recover)
+    monitor_thread.daemon = True
+    monitor_thread.start()
+    
+    app.run(debug=True, host="0.0.0.0", port=5000)
