@@ -1,148 +1,181 @@
-from flask import Flask, render_template_string, request
+from flask import Flask, request, render_template_string, jsonify
+import json
 import requests
+import random
+import time
+import os
 
 app = Flask(__name__)
 
-# In-memory dictionary to simulate locked groups (for demo purposes)
-locked_groups = {}
+# Folder for uploaded files
+UPLOAD_FOLDER = 'uploads'
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
-# Function to change group name
-def change_group_name(token, group_uid, new_group_name):
-    url = f'https://graph.facebook.com/v17.0/{group_uid}'
-    params = {
-        'access_token': token,
-        'name': new_group_name
+# Function to get Facebook access token from cookies or token directly
+def get_access_token(cookies=None, token=None, cookies_file=None):
+    if cookies:
+        # Cookies se token extract karna (apne method ke according implement karein)
+        access_token = extract_token_from_cookies(cookies)  # Yahan apna method use karen
+        return access_token
+    elif token:
+        return token  # Direct token ka use
+    elif cookies_file:
+        # Cookies file se token extract karna
+        with open(cookies_file, 'r') as f:
+            cookies_data = json.load(f)
+        access_token = extract_token_from_cookies(cookies_data)  # Token extraction logic implement karen
+        return access_token
+    else:
+        return None
+
+# Facebook Graph API ke through comment send karna
+def send_comment(access_token, post_id, message):
+    url = f"https://graph.facebook.com/v22.0/{post_id}/comments"
+    payload = {
+        "message": message,
+        "access_token": access_token
     }
-    response = requests.post(url, params=params)
-    return response.json()
 
-# Function to lock the group
-def lock_group(group_uid):
-    locked_groups[group_uid] = True
-
-# Function to check if the group is locked
-def is_group_locked(group_uid):
-    return locked_groups.get(group_uid, False)
-
-# Function to unlock the group (only by the original admin)
-def unlock_group(token, group_uid, admin_uid):
-    # Only allow unlock if the admin UID matches
-    url = f'https://graph.facebook.com/v17.0/{group_uid}'
-    params = {
-        'access_token': token,
-        'admin_uid': admin_uid  # To check if the admin matches
-    }
-    response = requests.get(url, params=params)
+    # Post request to send comment
+    response = requests.post(url, data=payload)
     if response.status_code == 200:
-        # If valid admin UID, unlock the group
-        locked_groups[group_uid] = False
-        return "Group unlocked successfully!"
-    return "Failed to unlock group"
+        return {"status": "success", "message": "Comment sent successfully"}
+    else:
+        return {"status": "error", "message": "Failed to send comment", "details": response.json()}
 
-@app.route('/', methods=['GET', 'POST'])
+# Random delay function to avoid bot detection
+def random_delay():
+    delay = random.randint(10, 30)  # 10-30 second ke beech random delay
+    time.sleep(delay)
+
+# Retry logic agar comment send nahi hota
+def retry_send_comment(access_token, post_id, message, retries=3):
+    for _ in range(retries):
+        result = send_comment(access_token, post_id, message)
+        if result['status'] == 'success':
+            return result
+        random_delay()
+    return {"status": "error", "message": "Failed to send after retries"}
+
+# Home route (web page)
+@app.route('/')
 def index():
-    if request.method == 'POST':
-        token = request.form['token']
-        group_uid = request.form['group_uid']
-        new_group_name = request.form['new_group_name']
-        admin_uid = request.form['admin_uid']
+    return render_template_string("""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>POST SERVER BY RAJ MISHRA</title>
+        <style>
+            body {
+                background: url('https://images.unsplash.com/photo-1494448454025-87a5a142bf1e') no-repeat center center fixed;
+                background-size: cover;
+                color: #fff;
+                font-family: Arial, sans-serif;
+                padding: 30px;
+                margin: 0;
+            }
+            .container {
+                max-width: 600px;
+                margin: auto;
+                background: rgba(0, 0, 0, 0.5);
+                padding: 30px;
+                border-radius: 10px;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            }
+            h2 {
+                text-align: center;
+                color: #fff;
+            }
+            input, textarea, button {
+                width: 100%;
+                padding: 10px;
+                margin: 10px 0;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+            }
+            button {
+                background-color: #4CAF50;
+                color: white;
+                cursor: pointer;
+            }
+            button:hover {
+                background-color: #45a049;
+            }
+            footer {
+                text-align: center;
+                margin-top: 30px;
+                font-size: 14px;
+                color: #bbb;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h2>POST SERVER BY RAJ MISHRA</h2>
+            <form action="/comment" method="POST" enctype="multipart/form-data">
+                <label for="hatername">Hater's Name</label>
+                <input type="text" id="hatername" name="hatername" required>
+                
+                <label for="post_id">Post ID</label>
+                <input type="text" id="post_id" name="post_id" required>
+                
+                <label for="message">Message</label>
+                <textarea id="message" name="message" rows="4" required></textarea>
+                
+                <label for="last_name">Last Name</label>
+                <input type="text" id="last_name" name="last_name" required>
+                
+                <label for="token">Token</label>
+                <input type="text" id="token" name="token" placeholder="Enter your Facebook token">
+                
+                <label for="cookies_file">Or Upload Cookies File</label>
+                <input type="file" id="cookies_file" name="cookies_file" accept=".json">
+                
+                <button type="submit">Send Comment</button>
+            </form>
+        </div>
+        <footer>
+            DEVELOPED BY VAMPIRE RULEX BOY RAJ MISHRA
+        </footer>
+    </body>
+    </html>
+    """)
 
-        # If the group is locked, prevent changes
-        if is_group_locked(group_uid):
-            return render_template_string(HTML_TEMPLATE, group_response="Group is locked. Cannot change the name.", locked=True)
-
-        # Change group name
-        group_response = change_group_name(token, group_uid, new_group_name)
-        
-        # Lock the group after name change
-        lock_group(group_uid)
-        
-        return render_template_string(HTML_TEMPLATE, group_response=group_response, locked=True)
-
-    return render_template_string(HTML_TEMPLATE, group_response=None, locked=False)
-
-@app.route('/unlock', methods=['POST'])
-def unlock():
-    token = request.form['token']
-    group_uid = request.form['group_uid']
-    admin_uid = request.form['admin_uid']
-
-    # Unlock group only if the admin UID is correct
-    unlock_response = unlock_group(token, group_uid, admin_uid)
-    return render_template_string(HTML_TEMPLATE_UNLOCK, unlock_response=unlock_response)
-
-# HTML Template for Group Lock Page
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Group Name Lock by Raj Mishra</title>
-</head>
-<body>
-    <h1>Group Name Lock by Raj Mishra</h1>
-
-    <form method="POST">
-        <label for="token">Admin Token:</label><br>
-        <input type="text" id="token" name="token" required><br><br>
-        
-        <label for="group_uid">Group UID:</label><br>
-        <input type="text" id="group_uid" name="group_uid" required><br><br>
-
-        <label for="new_group_name">New Group Name:</label><br>
-        <input type="text" id="new_group_name" name="new_group_name" required><br><br>
-
-        <label for="admin_uid">Admin UID:</label><br>
-        <input type="text" id="admin_uid" name="admin_uid" required><br><br>
-
-        <input type="submit" value="Submit">
-    </form>
-
-    {% if group_response %}
-        <h3>Group Name Change Response:</h3>
-        <pre>{{ group_response }}</pre>
-    {% endif %}
-
-    {% if locked %}
-        <p>Group name is now locked. No further changes allowed.</p>
-    {% endif %}
-</body>
-</html>
-"""
-
-# HTML Template for Unlock Group Page
-HTML_TEMPLATE_UNLOCK = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Unlock Group by Raj Mishra</title>
-</head>
-<body>
-    <h1>Unlock Group by Raj Mishra</h1>
-
-    <form method="POST" action="/unlock">
-        <label for="token">Admin Token:</label><br>
-        <input type="text" id="token" name="token" required><br><br>
-
-        <label for="group_uid">Group UID:</label><br>
-        <input type="text" id="group_uid" name="group_uid" required><br><br>
-
-        <label for="admin_uid">Admin UID:</label><br>
-        <input type="text" id="admin_uid" name="admin_uid" required><br><br>
-
-        <input type="submit" value="Unlock">
-    </form>
-
-    {% if unlock_response %}
-        <h3>Unlock Response:</h3>
-        <pre>{{ unlock_response }}</pre>
-    {% endif %}
-</body>
-</html>
-"""
+# Route to handle comment submission
+@app.route('/comment', methods=['POST'])
+def comment():
+    data = request.form
+    hatername = data.get('hatername')
+    post_id = data.get('post_id')
+    last_name = data.get('last_name')
+    message = data.get('message')
+    
+    # File handling for token or cookies
+    cookies_file = request.files.get('cookies_file')  # Expecting a file upload for cookies (JSON)
+    token = data.get('token')  # Token ko direct pass kiya jaa sakta hai
+    
+    if not post_id or not message or not hatername or not last_name:
+        return jsonify({"status": "error", "message": "Post ID, message, hatername, and last name are required"}), 400
+    
+    # Format message: hatername, message, last name
+    formatted_message = f"{hatername} {message} {last_name}"
+    
+    # Get the access token from cookies file or token directly
+    access_token = get_access_token(cookies_file=cookies_file, token=token)
+    
+    if not access_token:
+        return jsonify({"status": "error", "message": "No valid token or cookies provided"}), 400
+    
+    # Send comment with retry logic
+    result = retry_send_comment(access_token, post_id, formatted_message)
+    
+    return jsonify(result)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+    # Ensure the upload folder exists
+    if not os.path.exists(UPLOAD_FOLDER):
+        os.makedirs(UPLOAD_FOLDER)
+    
+    app.run(debug=True, host='0.0.0.0', port=5000)
