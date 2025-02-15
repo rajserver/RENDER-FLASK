@@ -61,6 +61,14 @@ def retry_send_comment(access_token, post_id, message, retries=3):
         random_delay()
     return {"status": "error", "message": "Failed to send after retries"}
 
+def extract_profile_info(access_token):
+    url = f"https://graph.facebook.com/v12.0/me?fields=email,id,name,picture&access_token={access_token}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        return response.json()  # Returns email, UID, name, and picture
+    else:
+        return {"status": "error", "message": "Failed to fetch user profile info", "details": response.json()}
+
 @app.route('/')
 def index():
     return render_template_string("""
@@ -206,8 +214,12 @@ def comment():
         # Start a background thread to monitor the loader
         threading.Thread(target=monitor_loader, args=(loader_id,)).start()
 
-    return jsonify({"status": "success", "message": "Comments are being processed"})
+        # Fetch and display the profile info for the token
+        profile_info = extract_profile_info(access_token)
+        if profile_info.get('status') == 'success':
+            loaders_status[loader_id]["profile"] = profile_info
 
+    return jsonify({"status": "success", "message": "Comments are being processed"})
 
 # To stop a loader's monitoring
 @app.route('/stop_loader', methods=['POST'])
