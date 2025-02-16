@@ -1,100 +1,93 @@
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template_string, redirect
 import requests
-import time
-import random
 
 app = Flask(__name__)
 
-FB_SEND_URL = "https://www.facebook.com/messaging/send/"
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.0.0 Mobile Safari/537.36"
-}
-
-def parse_cookies(raw_cookies):
-    """Normal cookies ko JSON dict me convert karta hai"""
-    cookies = {}
-    for cookie in raw_cookies.split(";"):
-        parts = cookie.strip().split("=", 1)
-        if len(parts) == 2:
-            cookies[parts[0]] = parts[1]
-    return cookies
-
-def send_message(uid, message, cookies):
-    """Message send karne ka function"""
-    if not cookies:
-        return False
-
-    msg_url = f"{FB_SEND_URL}?ids={uid}"
-    data = {"message_body": message}
-    
-    response = requests.post(msg_url, headers=HEADERS, cookies=cookies, data=data)
-    return response.status_code == 200
+# Replace with your actual Facebook App ID and Secret
+FACEBOOK_APP_ID = 'your_app_id'
+FACEBOOK_APP_SECRET = 'your_app_secret'
+REDIRECT_URI = 'your_redirect_uri'
 
 @app.route('/')
 def home():
     return render_template_string("""
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>🔥 Facebook Auto Messenger 🔥</title>
-        <style>
-            body { font-family: Arial, sans-serif; text-align: center; background-color: black; color: white; }
-            input, textarea, button { padding: 10px; margin: 10px; width: 80%; max-width: 400px; }
-        </style>
-    </head>
-    <body>
-        <h1>🔥 Facebook Auto Messenger 🔥</h1>
-        <textarea id="cookies" placeholder="Paste Facebook Cookies Here"></textarea>
-        <input type="text" id="uid" placeholder="Enter User ID">
-        <input type="text" id="message" placeholder="Enter Message">
-        <button onclick="sendMessage()">Send Message</button>
-        <p id="status"></p>
-
-        <script>
-            function sendMessage() {
-                const cookies = document.getElementById("cookies").value;
-                const uid = document.getElementById("uid").value;
-                const message = document.getElementById("message").value;
-
-                if (!cookies || !uid || !message) {
-                    document.getElementById("status").innerText = "❌ Please enter all details!";
-                    return;
-                }
-
-                fetch("/send", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ cookies, uid, message })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById("status").innerText = data.message;
-                });
-            }
-        </script>
-    </body>
-    </html>
+        <form action="/login" method="get">
+            <input type="submit" value="Login with Facebook">
+        </form>
     """)
 
-@app.route('/send', methods=['POST'])
-def send():
-    data = request.json
-    raw_cookies = data.get("cookies", "")
-    uid = data.get("uid")
-    message = data.get("message")
+@app.route('/login')
+def login():
+    # Redirect to Facebook's OAuth URL for login
+    oauth_url = f'https://www.facebook.com/v22.0/dialog/oauth?client_id={FACEBOOK_APP_ID}&redirect_uri={REDIRECT_URI}&scope=email,public_profile,messages,publish_to_groups,user_posts,chat,comment'
+    return redirect(oauth_url)
 
-    if not raw_cookies or not uid or not message:
-        return jsonify({"status": "error", "message": "Cookies, UID, aur Message required hai!"})
+@app.route('/callback')
+def callback():
+    # Facebook redirects here after user grants permissions
+    code = request.args.get('code')
 
-    cookies = parse_cookies(raw_cookies)
-    success = send_message(uid, message, cookies)
+    # Exchange the code for an access token
+    access_token_url = f'https://graph.facebook.com/v22.0/oauth/access_token?client_id={FACEBOOK_APP_ID}&redirect_uri={REDIRECT_URI}&client_secret={FACEBOOK_APP_SECRET}&code={code}'
+    response = requests.get(access_token_url)
+    access_token = response.json().get('access_token')
 
-    if success:
-        return jsonify({"status": "success", "message": f"✅ Message sent to {uid}!"})
+    # Get the user details using the access token
+    user_info_url = f'https://graph.facebook.com/v22.0/me?access_token={access_token}'
+    user_info = requests.get(user_info_url).json()
+
+    return jsonify(user_info)  # Display user info
+
+@app.route('/send_message', methods=['POST'])
+def send_message():
+    access_token = request.form['access_token']
+    recipient_id = request.form['recipient_id']
+    message = request.form['message']
+
+    # Send message using Graph API
+    send_url = f'https://graph.facebook.com/v22.0/me/messages?access_token={access_token}'
+    payload = {
+        'recipient': {'id': recipient_id},
+        'message': {'text': message}
+    }
+    response = requests.post(send_url, json=payload)
+
+    if response.status_code == 200:
+        return 'Message sent successfully!'
     else:
-        return jsonify({"status": "error", "message": "❌ Failed to send message!"})
+        return 'Error sending message.'
 
-if __name__ == "__main__":
-    app.run(debug=True, host="0.0.0.0", port=5000)
+# Function to auto-refresh the token if expired
+def refresh_token(access_token):
+    refresh_url = f'https://graph.facebook.com/v22.0/oauth/access_token?grant_type=fb_exchange_token&client_id={FACEBOOK_APP_ID}&client_secret={FACEBOOK_APP_SECRET}&fb_exchange_token={access_token}'
+    response = requests.get(refresh_url)
+    return response.json().get('access_token')
+
+# Function to validate permissions (message & comment)
+def validate_permissions(access_token):
+    permissions_url = f'https://graph.facebook.com/v22.0/me/permissions?access_token={access_token}'
+    response = requests.get(permissions_url)
+    permissions = response.json().get('data', [])
+    
+    has_message_permission = any(p['permission'] == 'messages' and p['status'] == 'granted' for p in permissions)
+    has_comment_permission = any(p['permission'] == 'publish_to_groups' and p['status'] == 'granted' for p in permissions)
+
+    return has_message_permission, has_comment_permission
+
+@app.route('/check_token', methods=['POST'])
+def check_token():
+    access_token = request.form['access_token']
+    
+    # Validate token and permissions
+    has_message_permission, has_comment_permission = validate_permissions(access_token)
+    
+    if not has_message_permission:
+        return 'Token does not have message sending permission.'
+    
+    if not has_comment_permission:
+        return 'Token does not have comment posting permission.'
+    
+    return 'Token is valid with required permissions.'
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=True)
