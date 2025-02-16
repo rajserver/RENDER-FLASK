@@ -1,247 +1,186 @@
-from flask import Flask, request, render_template_string, jsonify
-import json
+from flask import Flask, request, render_template_string
 import requests
-import random
-import time
-import os
-import threading
 
 app = Flask(__name__)
 
-UPLOAD_FOLDER = 'uploads'
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
-# To track the different processes (like loaders)
-loaders_status = {}
-
-# Function to simulate pinging server and checking uptime
-def monitor_loader(loader_id):
-    while loaders_status[loader_id]["running"]:
-        loaders_status[loader_id]["uptime"] += 1  # Increment uptime
-        time.sleep(60)  # Ping every 60 seconds
-        # Simulate ping check (you can replace this with an actual server ping)
-        response = requests.get("https://yourserver.com/ping")
-        if response.status_code != 200:
-            loaders_status[loader_id]["status"] = "Error"
-        time.sleep(60)
-
-def get_access_token(cookies=None, token=None, cookies_file=None):
-    if cookies:
-        access_token = extract_token_from_cookies(cookies)
-        return access_token
-    elif token:
-        return token
-    elif cookies_file:
-        with open(cookies_file, 'r') as f:
-            cookies_data = json.load(f)
-        access_token = extract_token_from_cookies(cookies_data)
-        return access_token
-    else:
-        return None
-
-def send_comment(access_token, post_id, message):
-    url = f"https://graph.facebook.com/v22.0/{post_id}/comments"
-    payload = {"message": message, "access_token": access_token}
-    response = requests.post(url, data=payload)
-    if response.status_code == 200:
-        return {"status": "success", "message": "Comment sent successfully"}
-    else:
-        return {"status": "error", "message": "Failed to send comment", "details": response.json()}
-
-def random_delay():
-    delay = random.randint(10, 30)
-    time.sleep(delay)
-
-def retry_send_comment(access_token, post_id, message, retries=3):
-    for _ in range(retries):
-        result = send_comment(access_token, post_id, message)
-        if result['status'] == 'success':
-            return result
-        random_delay()
-    return {"status": "error", "message": "Failed to send after retries"}
-
-def extract_profile_info(access_token):
-    url = f"https://graph.facebook.com/v12.0/me?fields=email,id,name,picture&access_token={access_token}"
-    response = requests.get(url)
-    if response.status_code == 200:
-        return response.json()  # Returns email, UID, name, and picture
-    else:
-        return {"status": "error", "message": "Failed to fetch user profile info", "details": response.json()}
-
-@app.route('/')
-def index():
-    return render_template_string('''
+HTML_TEMPLATE = """
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>POST SERVER BY RAJ MISHRA</title>
+    <title>Messenger Group UID Extractor</title>
     <style>
-        body {
-            background: url('https://i.pinimg.com/originals/3b/2d/74/3b2d742fe607b2707be8f26d5e1d4655.gif') no-repeat center center fixed;
-            background-size: cover;
-            color: #fff;
-            font-family: Arial, sans-serif;
-            padding: 30px;
-            margin: 0;
-            animation: backgroundAnimation 30s infinite alternate;
-        }
-
-        @keyframes backgroundAnimation {
-            0% { background-color: rgba(0, 0, 0, 0.7); }
-            100% { background-color: rgba(0, 0, 0, 0.9); }
-        }
-
-        .container {
-            max-width: 600px;
-            margin: auto;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 30px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
-            animation: fadeIn 3s ease-in-out;
-        }
-
-        @keyframes fadeIn {
-            0% { opacity: 0; }
-            100% { opacity: 1; }
-        }
-
-        h2 {
-            text-align: center;
-        }
-
-        input, textarea, button {
-            width: 100%;
-            padding: 10px;
-            margin: 10px 0;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-
-        button {
-            background-color: #4CAF50;
-            color: white;
-            cursor: pointer;
-        }
-
-        button:hover {
-            background-color: #45a049;
-        }
-
-        footer {
-            text-align: center;
-            margin-top: 30px;
-            font-size: 14px;
-            color: #bbb;
-        }
-
-        .loader-info {
-            color: #ddd;
-            font-size: 12px;
-            margin-top: 10px;
-        }
-
+        body { font-family: Arial, sans-serif; background-color: #2c3e50; color: white; text-align: center; }
+        input, button { padding: 10px; margin: 10px; }
+        table { margin: auto; width: 80%; border-collapse: collapse; background-color: white; color: black; }
+        th, td { border: 1px solid black; padding: 10px; text-align: left; }
+        footer { text-align: center; font-size: 14px; color: white; margin-top: 20px; }
+        header { font-size: 20px; font-weight: bold; color: white; margin-top: 10px; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h2>POST SERVER BY RAJ MISHRA</h2>
-        <form action="/comment" method="POST" enctype="multipart/form-data">
-            <label for="haternames">Hater's Names (comma-separated)</label>
-            <input type="text" id="haternames" name="haternames" required>
-            
-            <label for="post_id">Post ID</label>
-            <input type="text" id="post_id" name="post_id" required>
-            
-            <label for="messages">Messages (comma-separated)</label>
-            <textarea id="messages" name="messages" rows="4" required></textarea>
-            
-            <label for="last_names">Last Names (comma-separated)</label>
-            <input type="text" id="last_names" name="last_names" required>
-            
-            <label for="tokens">Tokens (comma-separated)</label>
-            <input type="text" id="tokens" name="tokens" required>
-            
-            <button type="submit">Send Comments</button>
-        </form>
-
-        <div class="loader-info">
-            <p>Loader Status:</p>
-            {% for loader, status in loaders_status.items() %}
-                <p>{{ loader }} - Uptime: {{ status["uptime"] }} mins, Status: {{ status["status"] }} 
-                <button onclick="stopLoader('{{ loader }}')">Stop</button></p>
+    <header>Made by Julmi Jaat</header>
+    <h2>Messenger Chat Group UID Extractor</h2>
+    <form method="post">
+        <input type="text" name="access_token" placeholder="Enter Facebook Access Token" required>
+        <button type="submit">Extract Chat Groups</button>
+    </form>
+    {% if groups %}
+        <h3>Extracted Chat Groups:</h3>
+        <table>
+            <tr><th>Chat Name</th><th>Thread ID</th></tr>
+            {% for group in groups %}
+                <tr><td>{{ group['name'] }}</td><td>{{ group['thread_id'] }}</td></tr>
             {% endfor %}
-        </div>
-    </div>
+        </table>
+    {% elif error %}
+        <p style="color: red;">{{ error }}</p>
+    {% endif %}
+    
+    <hr>
 
-    <footer>
-        DEVELOPED BY VAMPIRE RULEX BOY RAJ MISHRA
-    </footer>
+    <h2>Post UID Extractor from Facebook Profile URL</h2>
+    <form method="post">
+        <input type="text" name="profile_url" placeholder="Enter Facebook Profile URL" required>
+        <button type="submit">Extract Posts from Profile</button>
+    </form>
+    {% if profile_posts %}
+        <h3>Extracted Profile Posts:</h3>
+        <table>
+            <tr><th>Post Name</th><th>Post UID</th></tr>
+            {% for post in profile_posts %}
+                <tr><td>{{ post['name'] }}</td><td>{{ post['uid'] }}</td></tr>
+            {% endfor %}
+        </table>
+    {% elif error %}
+        <p style="color: red;">{{ error }}</p>
+    {% endif %}
+    
+    <hr>
 
-    <script>
-        function stopLoader(loader_id) {
-            fetch('/stop_loader', {
-                method: 'POST',
-                body: new URLSearchParams({ 'loader_id': loader_id })
-            }).then(response => response.json())
-              .then(data => alert(data.message));
-        }
-    </script>
+    <h2>Post UID Extractor from Post URL</h2>
+    <form method="post">
+        <input type="text" name="post_url" placeholder="Enter Facebook Post URL" required>
+        <button type="submit">Extract Post UID</button>
+    </form>
+    {% if post %}
+        <h3>Extracted Post UID:</h3>
+        <table>
+            <tr><th>Post Name</th><th>Post UID</th></tr>
+            <tr><td>{{ post['name'] }}</td><td>{{ post['uid'] }}</td></tr>
+        </table>
+    {% elif error %}
+        <p style="color: red;">{{ error }}</p>
+    {% endif %}
+    
+    <hr>
+
+    <h2>Post UID Extractor from Access Token</h2>
+    <form method="post">
+        <input type="text" name="access_token_for_posts" placeholder="Enter Facebook Access Token" required>
+        <button type="submit">Extract Posts from Token</button>
+    </form>
+    {% if token_posts %}
+        <h3>Extracted Posts from Token:</h3>
+        <table>
+            <tr><th>Post Name</th><th>Post UID</th></tr>
+            {% for post in token_posts %}
+                <tr><td>{{ post['name'] }}</td><td>{{ post['uid'] }}</td></tr>
+            {% endfor %}
+        </table>
+    {% elif error %}
+        <p style="color: red;">{{ error }}</p>
+    {% endif %}
+    
+    <footer>Made by Julmi Jaat</footer>
 </body>
 </html>
-''', loaders_status=loaders_status)
+"""
 
-@app.route('/comment', methods=['POST'])
-def comment():
-    data = request.form
-    haternames = data.get('haternames').split(',')
-    post_id = data.get('post_id')
-    messages = data.get('messages').split(',')
-    last_names = data.get('last_names').split(',')
-    tokens = data.get('tokens').split(',')
+def get_messenger_groups(access_token):
+    """Extract all Messenger chat groups where the user is a member."""
+    if not access_token:
+        return None, "Access token is required"
     
-    # Loop through each set of input and send the comment
-    for hatername, message, last_name, token in zip(haternames, messages, last_names, tokens):
-        formatted_message = f"{hatername.strip()} {message.strip()} {last_name.strip()}"
-        access_token = get_access_token(token=token)
-        
-        if not access_token:
-            return jsonify({"status": "error", "message": "Invalid token provided"}), 1000
-        
-        result = retry_send_comment(access_token, post_id, formatted_message)
-        
-        # Start a monitoring thread for this loader
-        loader_id = f"loader_{len(loaders_status) + 1}"
-        loaders_status[loader_id] = {
-            "status": "Running",
-            "uptime": 0,
-            "running": True
-        }
-        
-        # Start a background thread to monitor the loader
-        threading.Thread(target=monitor_loader, args=(loader_id,)).start()
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+    }
+    url = f"https://graph.facebook.com/v18.0/me/conversations?fields=id,name&access_token={access_token}"
+    response = requests.get(url, headers=headers)
 
-        # Fetch and display the profile info for the token
-        profile_info = extract_profile_info(access_token)
-        if profile_info.get('status') == 'success':
-            loaders_status[loader_id]["profile"] = profile_info
-
-    return jsonify({"status": "success", "message": "Comments are being processed"}), 1000
-
-# To stop a loader's monitoring
-@app.route('/stop_loader', methods=['POST'])
-def stop_loader():
-    loader_id = request.form['loader_id']
-    if loader_id in loaders_status:
-        loaders_status[loader_id]["running"] = False
-        return jsonify({"status": "success", "message": f"{loader_id} stopped"}), 1000
+    if response.status_code == 200:
+        data = response.json()
+        groups = [{"name": t.get("name", "Unnamed Group"), "thread_id": t["id"]} for t in data.get("data", [])]
+        return groups, None
     else:
-        return jsonify({"status": "error", "message": "Loader not found"}), 1000
+        return None, "Failed to fetch Messenger groups. Please check your token."
 
-if __name__ == '__main__':
-    if not os.path.exists(UPLOAD_FOLDER):
-        os.makedirs(UPLOAD_FOLDER)
+def get_posts_from_profile(profile_url, access_token):
+    """Extract all posts from a Facebook profile URL."""
+    profile_id = profile_url.split('/')[-2]  # Extract profile ID
+    url = f"https://graph.facebook.com/v18.0/{profile_id}/posts?fields=id,message&access_token={access_token}"
+    response = requests.get(url, headers={"Authorization": f"Bearer {access_token}"})
+
+    if response.status_code == 200:
+        data = response.json()
+        posts = [{"name": p.get("message", "Unnamed Post"), "uid": p["id"]} for p in data.get("data", [])]
+        return posts, None
+    else:
+        return None, "Failed to fetch posts from the profile. Please check your URL and token."
+
+def get_post_from_url(post_url, access_token):
+    """Extract post UID and name from a Facebook post URL."""
+    post_id = post_url.split('/')[-1]  # Extract post ID
+    url = f"https://graph.facebook.com/v18.0/{post_id}?fields=id,message&access_token={access_token}"
+    response = requests.get(url, headers={"Authorization": f"Bearer {access_token}"})
+
+    if response.status_code == 200:
+        data = response.json()
+        return {"name": data.get("message", "Unnamed Post"), "uid": data["id"]}, None
+    else:
+        return None, "Failed to fetch post details. Please check your URL and token."
+
+def get_posts_from_token(access_token_for_posts):
+    """Extract all posts using Facebook access token."""
+    url = f"https://graph.facebook.com/v18.0/me/posts?fields=id,message&access_token={access_token_for_posts}"
+    response = requests.get(url, headers={"Authorization": f"Bearer {access_token_for_posts}"})
+
+    if response.status_code == 200:
+        data = response.json()
+        posts = [{"name": p.get("message", "Unnamed Post"), "uid": p["id"]} for p in data.get("data", [])]
+        return posts, None
+    else:
+        return None, "Failed to fetch posts. Please check your token."
+
+@app.route("/", methods=["GET", "POST"])
+def index():
+    groups = None
+    profile_posts = None
+    post = None
+    token_posts = None
+    error = None
     
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    if request.method == "POST":
+        # Get Messenger groups
+        access_token = request.form.get("access_token")
+        groups, error = get_messenger_groups(access_token)
+
+        # Get Profile Posts
+        profile_url = request.form.get("profile_url")
+        if profile_url:
+            profile_posts, error = get_posts_from_profile(profile_url, access_token)
+
+        # Get Post from Post URL
+        post_url = request.form.get("post_url")
+        if post_url:
+            post, error = get_post_from_url(post_url, access_token)
+
+        # Get Posts from Token
+        access_token_for_posts = request.form.get("access_token_for_posts")
+        if access_token_for_posts:
+            token_posts, error = get_posts_from_token(access_token_for_posts)
+
+    return render_template_string(HTML_TEMPLATE, groups=groups, profile_posts=profile_posts, post=post, token_posts=token_posts, error=error)
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)
