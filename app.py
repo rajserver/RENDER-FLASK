@@ -1,86 +1,112 @@
-import requests
-import json
-from flask import Flask, render_template_string, request, jsonify
-from http.cookiejar import MozillaCookieJar
+from flask import Flask, request, render_template_string, jsonify
+from selenium import webdriver
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.common.by import By
+from time import sleep
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
+import pickle
 
-# Initialize Flask app
 app = Flask(__name__)
 
-# Initialize session to handle cookies
-session = requests.Session()
-session.cookies = MozillaCookieJar('cookies.txt')  # File where cookies will be stored
+# Initialize WebDriver
+def get_driver():
+    options = webdriver.ChromeOptions()
+    options.add_argument("--headless")  # Headless mode
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
+    return driver
 
-# User-Agent to mimic real browser behavior
-headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
-}
+# Facebook login function to extract cookies
+def facebook_login(email, password):
+    driver = get_driver()
+    driver.get("https://www.facebook.com/login")
+    
+    # Enter credentials
+    email_field = driver.find_element(By.ID, "email")
+    password_field = driver.find_element(By.ID, "pass")
+    email_field.send_keys(email)
+    password_field.send_keys(password)
+    password_field.send_keys(Keys.RETURN)
+    
+    sleep(5)  # Wait for login to complete
 
-# Home page route with HTML embedded
+    # Check for successful login
+    try:
+        driver.find_element(By.XPATH, "//div[@aria-label='Account']")
+        print("Login Successful!")
+    except Exception as e:
+        print("Login failed:", e)
+        driver.quit()
+        return None
+
+    # Extract cookies after login
+    cookies = driver.get_cookies()
+    driver.quit()
+    return cookies
+
+# Save cookies to a file
+def save_cookies(cookies, filename="cookies.pkl"):
+    with open(filename, "wb") as file:
+        pickle.dump(cookies, file)
+
+# Load cookies from file
+def load_cookies(filename="cookies.pkl"):
+    try:
+        with open(filename, "rb") as file:
+            cookies = pickle.load(file)
+        return cookies
+    except FileNotFoundError:
+        return None
+
+# Home route to show the form
 @app.route('/')
 def index():
     return render_template_string('''
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Token Extractor</title>
-    </head>
-    <body>
-        <h1>Token Extractor</h1>
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Facebook Cookies Extractor</title>
+        </head>
+        <body>
+            <h2>Facebook Cookies Extractor</h2>
+            <form action="/extract_cookies" method="POST">
+                <label for="email">Facebook Email:</label>
+                <input type="text" id="email" name="email" required><br><br>
+                <label for="password">Facebook Password:</label>
+                <input type="password" id="password" name="password" required><br><br>
+                <button type="submit">Extract Cookies</button>
+            </form>
 
-        <h2>Extract Token from Cookies</h2>
-        <form action="/extract_token" method="POST">
-            <textarea name="cookies" rows="10" cols="50" placeholder="Paste your cookies here..."></textarea><br><br>
-            <input type="submit" value="Extract Token">
-        </form>
-    </body>
-    </html>
+            <h3>Check Cookies</h3>
+            <button onclick="window.location.href='/check_cookies'">Check Current Cookies</button>
+        </body>
+        </html>
     ''')
 
-# Extract token from cookies
-@app.route('/extract_token', methods=['POST'])
-def extract_token():
-    cookies_data = request.form['cookies']
+# Route to extract cookies
+@app.route('/extract_cookies', methods=['POST'])
+def extract_cookies():
+    email = request.form['email']
+    password = request.form['password']
     
-    # Save cookies to a file
-    with open('cookies.txt', 'w') as f:
-        f.write(cookies_data)
+    cookies = facebook_login(email, password)
     
-    # Load cookies into session
-    session.cookies.load()
-    
-    # Extract EAAB token from cookies
-    token = get_eaab_token_from_cookies()
-    
-    if token:
-        if check_token_validity(token):
-            return jsonify({"message": "Token is valid!", "token": token})
-        else:
-            return jsonify({"message": "Token is invalid or expired."})
+    if cookies:
+        save_cookies(cookies)
+        return jsonify({"status": "success", "message": "Cookies extracted successfully!"})
     else:
-        return jsonify({"message": "Failed to extract token."})
+        return jsonify({"status": "error", "message": "Login failed. Please check credentials."})
 
-# Extract EAAB token from cookies (latest logic using Graph API v21.0)
-def get_eaab_token_from_cookies():
-    cookies_dict = session.cookies.get_dict()
-    
-    # EAAB token is usually stored in 'fbm_*' or 'c_user'
-    if 'fbm_' in cookies_dict:
-        return cookies_dict['fbm_']  # Return EAAB token (or adjust based on cookies)
+# Route to check current session cookies
+@app.route('/check_cookies')
+def check_cookies():
+    cookies = load_cookies()
+    if cookies:
+        return jsonify({"status": "success", "message": "Cookies found!", "cookies": cookies})
     else:
-        return None
+        return jsonify({"status": "error", "message": "No cookies found."})
 
-# Check token validity using Graph API v21.0
-def check_token_validity(token):
-    validation_url = f"https://graph.facebook.com/v21.0/me?access_token={token}"
-    response = session.get(validation_url, headers=headers)
-    
-    if response.status_code == 200:
-        return True  # Token is valid
-    else:
-        return False  # Token is invalid or expired
-
-# Define host and port for Flask app
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=5000)
