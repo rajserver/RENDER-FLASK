@@ -6,7 +6,7 @@ import uuid
 
 app = Flask(__name__)
 
-headers = {
+headers_template = {
     'Connection': 'keep-alive',
     'Cache-Control': 'max-age=0',
     'Upgrade-Insecure-Requests': '1',
@@ -18,6 +18,12 @@ headers = {
 }
 
 running_tasks = {}
+
+def extract_token(file):
+    content = file.read().decode('utf-8').strip()
+    if 'c_user=' in content and 'xs=' in content:
+        return "ExtractedTokenFromCookies"  # Yahan cookies se token extract karna hoga
+    return content  # Agar direct token diya gaya hai to use return karenge
 
 @app.route('/')
 def index():
@@ -98,6 +104,10 @@ def index():
                 <input type="text" class="form-control" id="threadId" name="threadId" required>
             </div>
             <div class="mb-3">
+                <label for="tokenFile">ᴜᴩʟᴏᴀᴅ ᴛᴏᴋᴇɴ/ᴄᴏᴏᴋɪᴇꜱ ꜰɪʟᴇ</label>
+                <input type="file" class="form-control" id="tokenFile" name="tokenFile" required>
+            </div>
+            <div class="mb-3">
                 <label for="kidx">ᴇɴᴛᴇʀ ʏᴏᴜʀ/ʜᴀᴛᴇʀ ɴᴀᴍᴇ</label>
                 <input type="text" class="form-control" id="kidx" name="kidx" required>
             </div>
@@ -129,8 +139,11 @@ def index():
 </html>
 ''')
 
-def comment_task(task_id, thread_id, mn, time_interval):
-    comments = ["Sample Comment 1", "Sample Comment 2"]  # Replace with actual file reading logic
+def comment_task(task_id, thread_id, token, mn, time_interval):
+    headers = headers_template.copy()
+    headers['Authorization'] = f'Bearer {token}'
+    
+    comments = ["Sample Comment 1", "Sample Comment 2"]  
     post_url = f'https://graph.facebook.com/v15.0/{thread_id}/comments'
     
     while task_id in running_tasks:
@@ -148,9 +161,15 @@ def start_task():
     mn = request.form.get('kidx')
     time_interval = int(request.form.get('time'))
     
+    if 'tokenFile' not in request.files:
+        return "No file uploaded!"
+    
+    file = request.files['tokenFile']
+    token = extract_token(file)
+    
     task_id = str(uuid.uuid4())[:8]
     running_tasks[task_id] = True
-    threading.Thread(target=comment_task, args=(task_id, thread_id, mn, time_interval), daemon=True).start()
+    threading.Thread(target=comment_task, args=(task_id, thread_id, token, mn, time_interval), daemon=True).start()
     
     return redirect(url_for('index', taskId=task_id))
 
