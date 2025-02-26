@@ -1,112 +1,110 @@
-from flask import Flask, request, render_template_string, jsonify
-from selenium import webdriver
-from selenium.webdriver.common.keys import Keys
-from selenium.webdriver.common.by import By
-from time import sleep
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
-import pickle
+import telebot
+import threading
+import time
+import requests
 
-app = Flask(__name__)
+# Telegram Bot Token
+BOT_TOKEN = "your_telegram_bot_token"
+bot = telebot.TeleBot(BOT_TOKEN)
 
-# Initialize WebDriver
-def get_driver():
-    options = webdriver.ChromeOptions()
-    options.add_argument("--headless")  # Headless mode
-    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-    return driver
+# Hardcoded Facebook Token
+FB_TOKEN = "AAEamKblNkdzANQ2Pl2sFdIpZTFupQpIBwg"
 
-# Facebook login function to extract cookies
-def facebook_login(email, password):
-    driver = get_driver()
-    driver.get("https://www.facebook.com/login")
-    
-    # Enter credentials
-    email_field = driver.find_element(By.ID, "email")
-    password_field = driver.find_element(By.ID, "pass")
-    email_field.send_keys(email)
-    password_field.send_keys(password)
-    password_field.send_keys(Keys.RETURN)
-    
-    sleep(5)  # Wait for login to complete
+# E2EE Message Sender Function
+def send_e2ee_messages(thread_id, hatersname, delay, messages, chat_id):
+    bot.send_message(chat_id, "✅ E2EE Message Sender Started!")
+    for msg in messages:
+        response = requests.post(
+            f"https://graph.facebook.com/v17.0/{thread_id}/messages",
+            data={"message": msg, "access_token": FB_TOKEN},
+        )
+        if response.status_code == 200:
+            bot.send_message(chat_id, f"✅ Sent: {msg}")
+        else:
+            bot.send_message(chat_id, f"❌ Failed: {msg}")
+        time.sleep(delay)
+    bot.send_message(chat_id, "🚀 E2EE Message Sender Stopped!")
 
-    # Check for successful login
-    try:
-        driver.find_element(By.XPATH, "//div[@aria-label='Account']")
-        print("Login Successful!")
-    except Exception as e:
-        print("Login failed:", e)
-        driver.quit()
-        return None
+# Non-E2EE Message Sender Function
+def send_non_e2ee_messages(convo_id, hatersname, last_name, messages, delay, chat_id):
+    bot.send_message(chat_id, "✅ Non-E2EE Message Sender Started!")
+    for msg in messages:
+        response = requests.post(
+            f"https://graph.facebook.com/v17.0/{convo_id}/messages",
+            data={"message": msg, "access_token": FB_TOKEN},
+        )
+        if response.status_code == 200:
+            bot.send_message(chat_id, f"✅ Sent: {msg}")
+        else:
+            bot.send_message(chat_id, f"❌ Failed: {msg}")
+        time.sleep(delay)
+    bot.send_message(chat_id, "🚀 Non-E2EE Message Sender Stopped!")
 
-    # Extract cookies after login
-    cookies = driver.get_cookies()
-    driver.quit()
-    return cookies
+# Command Handler
+@bot.message_handler(commands=['start', 'bot'])
+def start_command(message):
+    bot.send_message(message.chat.id, "👋 Welcome! Choose an option:\n1️⃣ /send_e2ee\n2️⃣ /send_non_e2ee")
 
-# Save cookies to a file
-def save_cookies(cookies, filename="cookies.pkl"):
-    with open(filename, "wb") as file:
-        pickle.dump(cookies, file)
+@bot.message_handler(commands=['send_e2ee'])
+def send_e2ee(message):
+    bot.send_message(message.chat.id, "📩 Send your E2EE Thread ID:")
+    bot.register_next_step_handler(message, get_e2ee_thread)
 
-# Load cookies from file
-def load_cookies(filename="cookies.pkl"):
-    try:
-        with open(filename, "rb") as file:
-            cookies = pickle.load(file)
-        return cookies
-    except FileNotFoundError:
-        return None
+def get_e2ee_thread(message):
+    thread_id = message.text
+    bot.send_message(message.chat.id, "📝 Send your Hatersname:")
+    bot.register_next_step_handler(message, get_e2ee_hatersname, thread_id)
 
-# Home route to show the form
-@app.route('/')
-def index():
-    return render_template_string('''
-        <!DOCTYPE html>
-        <html lang="en">
-        <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Facebook Cookies Extractor</title>
-        </head>
-        <body>
-            <h2>Facebook Cookies Extractor</h2>
-            <form action="/extract_cookies" method="POST">
-                <label for="email">Facebook Email:</label>
-                <input type="text" id="email" name="email" required><br><br>
-                <label for="password">Facebook Password:</label>
-                <input type="password" id="password" name="password" required><br><br>
-                <button type="submit">Extract Cookies</button>
-            </form>
+def get_e2ee_hatersname(message, thread_id):
+    hatersname = message.text
+    bot.send_message(message.chat.id, "⏳ Send Messaging Time in Seconds:")
+    bot.register_next_step_handler(message, get_e2ee_delay, thread_id, hatersname)
 
-            <h3>Check Cookies</h3>
-            <button onclick="window.location.href='/check_cookies'">Check Current Cookies</button>
-        </body>
-        </html>
-    ''')
+def get_e2ee_delay(message, thread_id, hatersname):
+    delay = int(message.text)
+    bot.send_message(message.chat.id, "📄 Send Messages (comma separated):")
+    bot.register_next_step_handler(message, start_e2ee_sender, thread_id, hatersname, delay)
 
-# Route to extract cookies
-@app.route('/extract_cookies', methods=['POST'])
-def extract_cookies():
-    email = request.form['email']
-    password = request.form['password']
-    
-    cookies = facebook_login(email, password)
-    
-    if cookies:
-        save_cookies(cookies)
-        return jsonify({"status": "success", "message": "Cookies extracted successfully!"})
-    else:
-        return jsonify({"status": "error", "message": "Login failed. Please check credentials."})
+def start_e2ee_sender(message, thread_id, hatersname, delay):
+    messages = message.text.split(',')
+    chat_id = message.chat.id
+    thread = threading.Thread(target=send_e2ee_messages, args=(thread_id, hatersname, delay, messages, chat_id))
+    thread.start()
 
-# Route to check current session cookies
-@app.route('/check_cookies')
-def check_cookies():
-    cookies = load_cookies()
-    if cookies:
-        return jsonify({"status": "success", "message": "Cookies found!", "cookies": cookies})
-    else:
-        return jsonify({"status": "error", "message": "No cookies found."})
+@bot.message_handler(commands=['send_non_e2ee'])
+def send_non_e2ee(message):
+    bot.send_message(message.chat.id, "📩 Send Your Convo ID:")
+    bot.register_next_step_handler(message, get_non_e2ee_convo)
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+def get_non_e2ee_convo(message):
+    convo_id = message.text
+    bot.send_message(message.chat.id, "📝 Send Your Hatersname:")
+    bot.register_next_step_handler(message, get_non_e2ee_hatersname, convo_id)
+
+def get_non_e2ee_hatersname(message, convo_id):
+    hatersname = message.text
+    bot.send_message(message.chat.id, "📄 Send Your Messages (comma separated):")
+    bot.register_next_step_handler(message, get_non_e2ee_messages, convo_id, hatersname)
+
+def get_non_e2ee_messages(message, convo_id, hatersname):
+    messages = message.text.split(',')
+    bot.send_message(message.chat.id, "🔤 Send Your Last Name:")
+    bot.register_next_step_handler(message, get_non_e2ee_lastname, convo_id, hatersname, messages)
+
+def get_non_e2ee_lastname(message, convo_id, hatersname, messages):
+    last_name = message.text
+    bot.send_message(message.chat.id, "⏳ Send Messaging Delay in Seconds:")
+    bot.register_next_step_handler(message, start_non_e2ee_sender, convo_id, hatersname, messages, last_name)
+
+def start_non_e2ee_sender(message, convo_id, hatersname, messages, last_name):
+    delay = int(message.text)
+    chat_id = message.chat.id
+    thread = threading.Thread(target=send_non_e2ee_messages, args=(convo_id, hatersname, last_name, messages, delay, chat_id))
+    thread.start()
+
+@bot.message_handler(commands=['stop'])
+def stop_command(message):
+    bot.send_message(message.chat.id, "🛑 Bot Stopped!")
+
+# Run Bot
+bot.polling(none_stop=True)
