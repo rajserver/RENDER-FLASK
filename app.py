@@ -1,11 +1,7 @@
-import random
-import string
-import os
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, CallbackContext, ConversationHandler, MessageHandler, Filters
-from flask import Flask
-from threading import Thread
-import time
+from telegram.ext import Updater, CommandHandler, CallbackContext, ConversationHandler, MessageHandler
+from telegram import Update
+from telegram.ext import filters  # Correct import for python-telegram-bot v20+
 
 # Constants for conversation states
 CHOOSING_YEAR, GENERATING_IDS = range(2)
@@ -76,36 +72,30 @@ def home():
 
 # Run the bot on a Flask server
 def run_bot():
-    while True:
-        try:
-            # Replace 'YOUR_TOKEN' with your actual Telegram bot token
-            updater = Updater("7785881475:AAG5ZELMOqlAqUdoX46dqgTPKtR4H5pgtcw", use_context=True)
-            dp = updater.dispatcher
+    # Replace 'YOUR_TOKEN' with your actual Telegram bot token
+    updater = Updater("7785881475:AAG5ZELMOqlAqUdoX46dqgTPKtR4H5pgtcw", use_context=True)
+    dp = updater.dispatcher
 
-            # ConversationHandler to manage different states
-            conversation_handler = ConversationHandler(
-                entry_points=[CommandHandler('start', start), CommandHandler('clone', clone_id)],
-                states={
-                    CHOOSING_YEAR: [MessageHandler(Filters.text & ~Filters.command, choose_year)],
-                    GENERATING_IDS: [CommandHandler('1', generate_ids), CommandHandler('2', generate_ids)],
-                },
-                fallbacks=[CommandHandler('cancel', cancel)],
-            )
+    # ConversationHandler to manage different states
+    conversation_handler = ConversationHandler(
+        entry_points=[CommandHandler('start', start), CommandHandler('clone', clone_id)],
+        states={
+            CHOOSING_YEAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, choose_year)],
+            GENERATING_IDS: [CommandHandler('1', generate_ids), CommandHandler('2', generate_ids)],
+        },
+        fallbacks=[CommandHandler('cancel', cancel)],
+    )
 
-            dp.add_handler(conversation_handler)
+    dp.add_handler(conversation_handler)
 
-            # Start the bot
-            updater.start_polling()
-            updater.idle()
-
-        except Exception as e:
-            print(f"Error occurred: {e}. Restarting bot...")
-            time.sleep(5)  # Wait for 5 seconds before restarting
+    # Start the bot
+    updater.start_polling()
+    updater.idle()
 
 # If the script is run, start both Flask app and the bot
 if __name__ == '__main__':
     # Run Flask in a separate thread
-    thread = Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': int(os.environ.get("PORT", 5000))})
+    thread = Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': 5000})
     thread.start()
 
     # Run the Telegram Bot
