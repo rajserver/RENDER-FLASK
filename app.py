@@ -1,7 +1,6 @@
 import logging
 from telegram import Update
-from telegram.ext import Application, CommandHandler, CallbackContext, ConversationHandler, MessageHandler
-from telegram.ext.filters import Command
+from telegram.ext import Application, CommandHandler, CallbackContext, ConversationHandler, MessageHandler, filters
 from flask import Flask
 from threading import Thread
 
@@ -21,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 # Command Handlers
 async def start(update: Update, context: CallbackContext):
-    await update.message.reply_text('Welcome to the Clone ID bot. Use /clone id to start.')
+    await update.message.reply_text('Welcome to the Clone ID bot. Use /clone to start.')
     return CHOOSING_YEAR
 
 async def clone_id(update: Update, context: CallbackContext):
@@ -54,13 +53,13 @@ async def cancel(update: Update, context: CallbackContext):
 
 # Setting up the conversation handler
 conversation_handler = ConversationHandler(
-    entry_points=[CommandHandler('start', start, filters=Command('start')),
-                  CommandHandler('clone', clone_id, filters=Command('clone'))],
+    entry_points=[CommandHandler('start', start),
+                  CommandHandler('clone', clone_id)],
     states={
-        CHOOSING_YEAR: [MessageHandler(Command('1') | Command('2'), choose_year)],
-        GENERATING_IDS: [MessageHandler(Command('1') | Command('2'), generate_ids)],
+        CHOOSING_YEAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, choose_year)],
+        GENERATING_IDS: [MessageHandler(filters.TEXT & ~filters.COMMAND, generate_ids)],
     },
-    fallbacks=[CommandHandler('cancel', cancel, filters=Command('cancel'))],
+    fallbacks=[CommandHandler('cancel', cancel)],
 )
 
 # Bot setup
