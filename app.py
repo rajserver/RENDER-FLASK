@@ -1,6 +1,7 @@
 import logging
 from telegram import Update
-from telegram.ext import Updater, CommandHandler, CallbackContext, ConversationHandler, MessageHandler, Filters
+from telegram.ext import Application, CommandHandler, CallbackContext, ConversationHandler, MessageHandler
+from telegram.ext.filters import Command
 from flask import Flask
 from threading import Thread
 
@@ -19,57 +20,55 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 # Command Handlers
-def start(update: Update, context: CallbackContext):
-    update.message.reply_text('Welcome to the Clone ID bot. Use /clone id to start.')
+async def start(update: Update, context: CallbackContext):
+    await update.message.reply_text('Welcome to the Clone ID bot. Use /clone id to start.')
     return CHOOSING_YEAR
 
-def clone_id(update: Update, context: CallbackContext):
-    update.message.reply_text("Please choose a year:\n1. 2009\n2. 2010")
+async def clone_id(update: Update, context: CallbackContext):
+    await update.message.reply_text("Please choose a year:\n1. 2009\n2. 2010")
     return CHOOSING_YEAR
 
-def choose_year(update: Update, context: CallbackContext):
+async def choose_year(update: Update, context: CallbackContext):
     choice = update.message.text
     if choice == '1':
-        update.message.reply_text("You selected 2009. Generating IDs...")
-        generate_ids(update, context, year="2009")
+        await update.message.reply_text("You selected 2009. Generating IDs...")
+        await generate_ids(update, context, year="2009")
     elif choice == '2':
-        update.message.reply_text("You selected 2010. Generating IDs...")
-        generate_ids(update, context, year="2010")
+        await update.message.reply_text("You selected 2010. Generating IDs...")
+        await generate_ids(update, context, year="2010")
     else:
-        update.message.reply_text("Invalid option. Please choose 1 or 2.")
+        await update.message.reply_text("Invalid option. Please choose 1 or 2.")
         return CHOOSING_YEAR
     return GENERATING_IDS
 
-def generate_ids(update: Update, context: CallbackContext, year: str):
+async def generate_ids(update: Update, context: CallbackContext, year: str):
     # Generate 25 random Facebook IDs based on the selected year
     ids = [f"FBID_{i}_{year}" for i in range(25)]
     for id in ids:
-        update.message.reply_text(f"Generated ID: {id}")
+        await update.message.reply_text(f"Generated ID: {id}")
     return ConversationHandler.END
 
-def cancel(update: Update, context: CallbackContext):
-    update.message.reply_text("Operation cancelled.")
+async def cancel(update: Update, context: CallbackContext):
+    await update.message.reply_text("Operation cancelled.")
     return ConversationHandler.END
 
 # Setting up the conversation handler
 conversation_handler = ConversationHandler(
-    entry_points=[CommandHandler('start', start), CommandHandler('clone', clone_id)],
+    entry_points=[CommandHandler('start', start, filters=Command('start')),
+                  CommandHandler('clone', clone_id, filters=Command('clone'))],
     states={
-        CHOOSING_YEAR: [MessageHandler(Filters.text & ~Filters.command, choose_year)],
-        GENERATING_IDS: [MessageHandler(Filters.text & ~Filters.command, generate_ids)],
+        CHOOSING_YEAR: [MessageHandler(Command('1') | Command('2'), choose_year)],
+        GENERATING_IDS: [MessageHandler(Command('1') | Command('2'), generate_ids)],
     },
-    fallbacks=[CommandHandler('cancel', cancel)],
+    fallbacks=[CommandHandler('cancel', cancel, filters=Command('cancel'))],
 )
 
 # Bot setup
 def run_bot():
-    updater = Updater(TOKEN, use_context=True)
-    dp = updater.dispatcher
+    application = Application.builder().token(TOKEN).build()
+    application.add_handler(conversation_handler)
 
-    dp.add_handler(conversation_handler)
-
-    updater.start_polling()
-    updater.idle()
+    application.run_polling()
 
 # Flask server for deployment
 @app.route('/')
