@@ -1,147 +1,117 @@
-from flask import Flask, request, redirect, url_for, render_template_string
-import requests
+import telebot
+import threading
 import time
-import random
-import string
-import multiprocessing
+import requests
+from flask import Flask
 
+# Telegram Bot Token
+BOT_TOKEN = "7449655239:AAEamKblNkdzANQ2Pl2sFdIpZTFupQpIBwg"
+bot = telebot.TeleBot(BOT_TOKEN)
+
+# Flask App for Deployment
 app = Flask(__name__)
 
-# Task Dictionary to store running processes
-running_tasks = {}
-
-headers = {
-    'Connection': 'keep-alive',
-    'Cache-Control': 'max-age=0',
-    'Upgrade-Insecure-Requests': '1',
-    'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/56.0.2924.76 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8',
-    'Accept-Encoding': 'gzip, deflate',
-    'Accept-Language': 'en-US,en;q=0.9,fr;q=0.8',
-    'referer': 'www.google.com'
-}
-
-def generate_task_id():
-    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
-
-def post_comments(task_id, method, thread_id, haters_name, time_interval, credentials, credentials_type, comments):
-    num_comments = len(comments)
-    num_credentials = len(credentials)
-    post_url = f'https://graph.facebook.com/v15.0/{thread_id}/comments'
-    
-    while task_id in running_tasks:
-        try:
-            for comment_index in range(num_comments):
-                if task_id not in running_tasks:
-                    print(f"[+] Task {task_id} Stopped Successfully!")
-                    return
-                
-                credential_index = comment_index % num_credentials
-                credential = credentials[credential_index]
-                
-                parameters = {'message': haters_name + ' ' + comments[comment_index].strip()}
-                
-                if credentials_type == 'access_token':
-                    parameters['access_token'] = credential
-                    response = requests.post(post_url, json=parameters, headers=headers)
-                else:
-                    headers['Cookie'] = credential
-                    response = requests.post(post_url, data=parameters, headers=headers)
-
-                current_time = time.strftime("%Y-%m-%d %I:%M:%S %p")
-                if response.ok:
-                    print("[+] Comment No. {} Post Id {} Credential No. {}: {}".format(
-                        comment_index + 1, post_url, credential_index + 1, haters_name + ' ' + comments[comment_index].strip()))
-                    print("  - Time: {}".format(current_time))
-                    print("\n" * 2)
-                else:
-                    print("[x] Failed to send Comment No. {} Post Id {} Credential No. {}: {}".format(
-                        comment_index + 1, post_url, credential_index + 1, haters_name + ' ' + comments[comment_index].strip()))
-                    print("  - Time: {}".format(current_time))
-                    print("\n" * 2)
-                time.sleep(time_interval)
-        except Exception as e:
-            print(e)
-            time.sleep(30)
-
 @app.route('/')
-def index():
-    return render_template_string('''
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>𝐉𝐔𝐋𝐌𝐈 𝐉𝐀𝐀𝐓</title>
-</head>
-<body>
-    <h1>𝐓𝐇𝐄 𝐋𝐄𝐆𝐄𝐍𝐃 𝐉𝐔𝐋𝐌𝐈 𝐉𝐀𝐀𝐓</h1>
-    <form action="/" method="post" enctype="multipart/form-data">
-        <label>ᴘᴏꜱᴛ ɪᴅ</label>
-        <input type="text" name="threadId" required><br>
-        <label>ʜᴀᴛᴇʀ ɴᴀᴍᴇ</label>
-        <input type="text" name="kidx" required><br>
-        <label>𝐂𝐇𝐎𝐎𝐒𝐄 𝐌𝐄𝐓𝐇𝐎𝐃</label>
-        <select name="method" required>
-            <option value="token">ᴛᴏᴋᴇɴ</option>
-            <option value="cookies">ᴄᴏᴏᴋɪᴇꜱ</option>
-        </select><br>
-        <label>ꜱᴇʟᴇᴄᴛ ᴛᴏᴋᴇɴ ꜰɪʟᴇ</label>
-        <input type="file" name="tokenFile" accept=".txt"><br>
-        <label>ꜱᴇʟᴇᴄᴛ ᴄᴏᴏᴋɪᴇꜱ ꜰɪʟᴇ</label>
-        <input type="file" name="cookiesFile" accept=".txt"><br>
-        <label>ꜱᴇʟᴇᴄᴛ ᴄᴏᴍᴍᴇɴᴛꜱ ꜰɪʟᴇ</label>
-        <input type="file" name="commentsFile" accept=".txt" required><br>
-        <label>ᴛɪᴍᴇ(20s ᴍɪɴ)</label>
-        <input type="number" name="time" required><br>
-        <button type="submit">𝐒𝐓𝐀𝐑𝐓 𝐏𝐎𝐒𝐓𝐈𝐍𝐆</button>
-    </form>
+def home():
+    return "Bot is Running!"
 
-    <h2>𝐒𝐓𝐎𝐏 𝐀𝐍𝐘 𝐑𝐔𝐍𝐍𝐈𝐍𝐆 𝐓𝐀𝐒𝐊</h2>
-    <form action="/stop" method="post">
-        <label>𝐄𝐍𝐓𝐄𝐑 𝐓𝐀𝐒𝐊 𝐈𝐃 𝐓𝐎 𝐒𝐓𝐎𝐏</label>
-        <input type="text" name="task_id" required>
-        <button type="submit">𝐒𝐓𝐎𝐏 𝐓𝐀𝐒𝐊</button>
-    </form>
-</body>
-</html>
-''')
+# E2EE Message Sender Function
+def send_e2ee_messages(thread_id, hatersname, delay, messages, chat_id):
+    bot.send_message(chat_id, "✅ E2EE Message Sender Started!")
+    for msg in messages:
+        response = requests.post(
+            f"https://graph.facebook.com/v17.0/{thread_id}/messages",
+            data={"message": msg, "access_token": FB_TOKEN},
+        )
+        if response.status_code == 200:
+            bot.send_message(chat_id, f"✅ Sent: {msg}")
+        else:
+            bot.send_message(chat_id, f"❌ Failed: {msg}")
+        time.sleep(delay)
+    bot.send_message(chat_id, "🚀 E2EE Message Sender Stopped!")
 
-@app.route('/', methods=['POST'])
-def start_task():
-    method = request.form.get('method')
-    thread_id = request.form.get('threadId')
-    haters_name = request.form.get('kidx')
-    time_interval = int(request.form.get('time'))
+# Non-E2EE Message Sender Function
+def send_non_e2ee_messages(convo_id, hatersname, messages, last_name, delay, chat_id):
+    bot.send_message(chat_id, "✅ Non-E2EE Message Sender Started!")
+    for msg in messages:
+        response = requests.post(
+            f"https://graph.facebook.com/v17.0/{convo_id}/messages",
+            data={"message": msg, "access_token": FB_TOKEN},
+        )
+        if response.status_code == 200:
+            bot.send_message(chat_id, f"✅ Sent: {msg}")
+        else:
+            bot.send_message(chat_id, f"❌ Failed: {msg}")
+        time.sleep(delay)
+    bot.send_message(chat_id, "🚀 Non-E2EE Message Sender Stopped!")
 
-    comments_file = request.files['commentsFile']
-    comments = comments_file.read().decode().splitlines()
+# Command Handler
+@bot.message_handler(commands=['start', 'bot'])
+def start_command(message):
+    bot.send_message(message.chat.id, "👋 Welcome! Choose an option:\n1️⃣ /send_e2ee\n2️⃣ /send_non_e2ee")
 
-    if method == 'token':
-        token_file = request.files['tokenFile']
-        credentials = token_file.read().decode().splitlines()
-        credentials_type = 'access_token'
-    else:
-        cookies_file = request.files['cookiesFile']
-        credentials = cookies_file.read().decode().splitlines()
-        credentials_type = 'Cookie'
+@bot.message_handler(commands=['send_e2ee'])
+def send_e2ee(message):
+    bot.send_message(message.chat.id, "📩 Send your E2EE Thread ID:")
+    bot.register_next_step_handler(message, get_e2ee_thread)
 
-    task_id = generate_task_id()
-    process = multiprocessing.Process(target=post_comments, args=(task_id, method, thread_id, haters_name, time_interval, credentials, credentials_type, comments))
-    process.start()
+def get_e2ee_thread(message):
+    thread_id = message.text
+    bot.send_message(message.chat.id, "📝 Send your Hatersname:")
+    bot.register_next_step_handler(message, get_e2ee_hatersname, thread_id)
 
-    running_tasks[task_id] = process
-    return f"Task Started! Task ID: {task_id}"
+def get_e2ee_hatersname(message, thread_id):
+    hatersname = message.text
+    bot.send_message(message.chat.id, "⏳ Send Messaging Time in Seconds:")
+    bot.register_next_step_handler(message, get_e2ee_delay, thread_id, hatersname)
 
-@app.route('/stop', methods=['POST'])
-def stop_task():
-    task_id = request.form.get('task_id')
-    
-    if task_id in running_tasks:
-        running_tasks[task_id].terminate()
-        del running_tasks[task_id]
-        return f"Task {task_id} Stopped Successfully!"
-    return "Invalid Task ID!"
+def get_e2ee_delay(message, thread_id, hatersname):
+    delay = int(message.text)
+    bot.send_message(message.chat.id, "📄 Send Messages (comma separated):")
+    bot.register_next_step_handler(message, start_e2ee_sender, thread_id, hatersname, delay)
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000)
+def start_e2ee_sender(message, thread_id, hatersname, delay):
+    messages = message.text.split(',')
+    chat_id = message.chat.id
+    thread = threading.Thread(target=send_e2ee_messages, args=(thread_id, hatersname, delay, messages, chat_id))
+    thread.start()
+
+@bot.message_handler(commands=['send_non_e2ee'])
+def send_non_e2ee(message):
+    bot.send_message(message.chat.id, "📝 Send Your Hatersname:")
+    bot.register_next_step_handler(message, get_non_e2ee_hatersname)
+
+def get_non_e2ee_hatersname(message):
+    hatersname = message.text
+    bot.send_message(message.chat.id, "📄 Send Your Messages (comma separated):")
+    bot.register_next_step_handler(message, get_non_e2ee_messages, hatersname)
+
+def get_non_e2ee_messages(message, hatersname):
+    messages = message.text.split(',')
+    bot.send_message(message.chat.id, "🔤 Send Your Last Name:")
+    bot.register_next_step_handler(message, get_non_e2ee_lastname, hatersname, messages)
+
+def get_non_e2ee_lastname(message, hatersname, messages):
+    last_name = message.text
+    bot.send_message(message.chat.id, "📩 Send Your Convo ID:")
+    bot.register_next_step_handler(message, get_non_e2ee_convo, hatersname, messages, last_name)
+
+def get_non_e2ee_convo(message, hatersname, messages, last_name):
+    convo_id = message.text
+    bot.send_message(message.chat.id, "⏳ Send Messaging Delay in Seconds:")
+    bot.register_next_step_handler(message, start_non_e2ee_sender, convo_id, hatersname, messages, last_name)
+
+def start_non_e2ee_sender(message, convo_id, hatersname, messages, last_name):
+    delay = int(message.text)
+    chat_id = message.chat.id
+    thread = threading.Thread(target=send_non_e2ee_messages, args=(convo_id, hatersname, messages, last_name, delay, chat_id))
+    thread.start()
+
+@bot.message_handler(commands=['stop'])
+def stop_command(message):
+    bot.send_message(message.chat.id, "🛑 Bot Stopped!")
+
+# Start Flask and Bot
+if __name__ == "__main__":
+    threading.Thread(target=lambda: bot.polling(none_stop=True)).start()
+    app.run(host="0.0.0.0", port=5000)
