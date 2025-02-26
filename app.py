@@ -1,117 +1,112 @@
-import telebot
-import threading
-import time
-import requests
+import random
+import string
+import os
+from telegram import Update
+from telegram.ext import Updater, CommandHandler, CallbackContext, ConversationHandler, MessageHandler, Filters
 from flask import Flask
+from threading import Thread
+import time
 
-# Telegram Bot Token
-BOT_TOKEN = "7449655239:AAEamKblNkdzANQ2Pl2sFdIpZTFupQpIBwg"
-bot = telebot.TeleBot(BOT_TOKEN)
+# Constants for conversation states
+CHOOSING_YEAR, GENERATING_IDS = range(2)
 
-# Flask App for Deployment
+# Function to generate random Facebook ID, UID, and password
+def generate_random_data(year):
+    fb_id = ''.join(random.choices(string.digits, k=10))
+    uid = ''.join(random.choices(string.digits, k=15))
+    password = ''.join(random.choices(string.ascii_letters + string.digits, k=12))
+    otp = ''.join(random.choices(string.digits, k=6))
+
+    return fb_id, uid, password, otp
+
+# Start command handler to reset bot and show options
+def start(update: Update, context: CallbackContext):
+    update.message.reply_text("Welcome! Please use /clone to begin cloning.")
+    return CHOOSING_YEAR
+
+# Command handler for /clone id
+def clone_id(update: Update, context: CallbackContext):
+    update.message.reply_text("Choose your year:\n1. 2009\n2. 2010")
+    return CHOOSING_YEAR
+
+# Handler for year selection
+def choose_year(update: Update, context: CallbackContext):
+    choice = update.message.text.strip()
+
+    if choice == "1":
+        context.user_data['year'] = "2009"
+        update.message.reply_text("You chose 2009. Now type /1 to generate 25 IDs.")
+    elif choice == "2":
+        context.user_data['year'] = "2010"
+        update.message.reply_text("You chose 2010. Now type /2 to generate 25 IDs.")
+    else:
+        update.message.reply_text("Invalid choice. Please select 1 for 2009 or 2 for 2010.")
+        return CHOOSING_YEAR
+
+    return GENERATING_IDS
+
+# Command handler for /1 and /2 to generate 25 IDs
+def generate_ids(update: Update, context: CallbackContext):
+    year = context.user_data.get('year')
+    if not year:
+        update.message.reply_text("Please use /clone to choose a year first.")
+        return CHOOSING_YEAR
+
+    ids = []
+    for _ in range(25):  # Generate 25 IDs
+        fb_id, uid, password, otp = generate_random_data(year)
+        ids.append(f"FB ID: {fb_id}\nUID: {uid}\nPassword: {password}\nOTP: {otp}\n")
+
+    # Send the generated IDs to the user
+    update.message.reply_text("\n\n".join(ids))
+    return GENERATING_IDS
+
+# Reset conversation and go back to start
+def cancel(update: Update, context: CallbackContext):
+    update.message.reply_text("The process has been reset. Type /clone to start again.")
+    return ConversationHandler.END
+
+# Flask app setup
 app = Flask(__name__)
 
+# Start command handler for Flask to keep bot running
 @app.route('/')
 def home():
-    return "Bot is Running!"
+    return "Bot is Running"
 
-# E2EE Message Sender Function
-def send_e2ee_messages(thread_id, hatersname, delay, messages, chat_id):
-    bot.send_message(chat_id, "✅ E2EE Message Sender Started!")
-    for msg in messages:
-        response = requests.post(
-            f"https://graph.facebook.com/v17.0/{thread_id}/messages",
-            data={"message": msg, "access_token": FB_TOKEN},
-        )
-        if response.status_code == 200:
-            bot.send_message(chat_id, f"✅ Sent: {msg}")
-        else:
-            bot.send_message(chat_id, f"❌ Failed: {msg}")
-        time.sleep(delay)
-    bot.send_message(chat_id, "🚀 E2EE Message Sender Stopped!")
+# Run the bot on a Flask server
+def run_bot():
+    while True:
+        try:
+            # Replace 'YOUR_TOKEN' with your actual Telegram bot token
+            updater = Updater("7785881475:AAG5ZELMOqlAqUdoX46dqgTPKtR4H5pgtcw", use_context=True)
+            dp = updater.dispatcher
 
-# Non-E2EE Message Sender Function
-def send_non_e2ee_messages(convo_id, hatersname, messages, last_name, delay, chat_id):
-    bot.send_message(chat_id, "✅ Non-E2EE Message Sender Started!")
-    for msg in messages:
-        response = requests.post(
-            f"https://graph.facebook.com/v17.0/{convo_id}/messages",
-            data={"message": msg, "access_token": FB_TOKEN},
-        )
-        if response.status_code == 200:
-            bot.send_message(chat_id, f"✅ Sent: {msg}")
-        else:
-            bot.send_message(chat_id, f"❌ Failed: {msg}")
-        time.sleep(delay)
-    bot.send_message(chat_id, "🚀 Non-E2EE Message Sender Stopped!")
+            # ConversationHandler to manage different states
+            conversation_handler = ConversationHandler(
+                entry_points=[CommandHandler('start', start), CommandHandler('clone', clone_id)],
+                states={
+                    CHOOSING_YEAR: [MessageHandler(Filters.text & ~Filters.command, choose_year)],
+                    GENERATING_IDS: [CommandHandler('1', generate_ids), CommandHandler('2', generate_ids)],
+                },
+                fallbacks=[CommandHandler('cancel', cancel)],
+            )
 
-# Command Handler
-@bot.message_handler(commands=['start', 'bot'])
-def start_command(message):
-    bot.send_message(message.chat.id, "👋 Welcome! Choose an option:\n1️⃣ /send_e2ee\n2️⃣ /send_non_e2ee")
+            dp.add_handler(conversation_handler)
 
-@bot.message_handler(commands=['send_e2ee'])
-def send_e2ee(message):
-    bot.send_message(message.chat.id, "📩 Send your E2EE Thread ID:")
-    bot.register_next_step_handler(message, get_e2ee_thread)
+            # Start the bot
+            updater.start_polling()
+            updater.idle()
 
-def get_e2ee_thread(message):
-    thread_id = message.text
-    bot.send_message(message.chat.id, "📝 Send your Hatersname:")
-    bot.register_next_step_handler(message, get_e2ee_hatersname, thread_id)
+        except Exception as e:
+            print(f"Error occurred: {e}. Restarting bot...")
+            time.sleep(5)  # Wait for 5 seconds before restarting
 
-def get_e2ee_hatersname(message, thread_id):
-    hatersname = message.text
-    bot.send_message(message.chat.id, "⏳ Send Messaging Time in Seconds:")
-    bot.register_next_step_handler(message, get_e2ee_delay, thread_id, hatersname)
-
-def get_e2ee_delay(message, thread_id, hatersname):
-    delay = int(message.text)
-    bot.send_message(message.chat.id, "📄 Send Messages (comma separated):")
-    bot.register_next_step_handler(message, start_e2ee_sender, thread_id, hatersname, delay)
-
-def start_e2ee_sender(message, thread_id, hatersname, delay):
-    messages = message.text.split(',')
-    chat_id = message.chat.id
-    thread = threading.Thread(target=send_e2ee_messages, args=(thread_id, hatersname, delay, messages, chat_id))
+# If the script is run, start both Flask app and the bot
+if __name__ == '__main__':
+    # Run Flask in a separate thread
+    thread = Thread(target=app.run, kwargs={'host': '0.0.0.0', 'port': int(os.environ.get("PORT", 5000))})
     thread.start()
 
-@bot.message_handler(commands=['send_non_e2ee'])
-def send_non_e2ee(message):
-    bot.send_message(message.chat.id, "📝 Send Your Hatersname:")
-    bot.register_next_step_handler(message, get_non_e2ee_hatersname)
-
-def get_non_e2ee_hatersname(message):
-    hatersname = message.text
-    bot.send_message(message.chat.id, "📄 Send Your Messages (comma separated):")
-    bot.register_next_step_handler(message, get_non_e2ee_messages, hatersname)
-
-def get_non_e2ee_messages(message, hatersname):
-    messages = message.text.split(',')
-    bot.send_message(message.chat.id, "🔤 Send Your Last Name:")
-    bot.register_next_step_handler(message, get_non_e2ee_lastname, hatersname, messages)
-
-def get_non_e2ee_lastname(message, hatersname, messages):
-    last_name = message.text
-    bot.send_message(message.chat.id, "📩 Send Your Convo ID:")
-    bot.register_next_step_handler(message, get_non_e2ee_convo, hatersname, messages, last_name)
-
-def get_non_e2ee_convo(message, hatersname, messages, last_name):
-    convo_id = message.text
-    bot.send_message(message.chat.id, "⏳ Send Messaging Delay in Seconds:")
-    bot.register_next_step_handler(message, start_non_e2ee_sender, convo_id, hatersname, messages, last_name)
-
-def start_non_e2ee_sender(message, convo_id, hatersname, messages, last_name):
-    delay = int(message.text)
-    chat_id = message.chat.id
-    thread = threading.Thread(target=send_non_e2ee_messages, args=(convo_id, hatersname, messages, last_name, delay, chat_id))
-    thread.start()
-
-@bot.message_handler(commands=['stop'])
-def stop_command(message):
-    bot.send_message(message.chat.id, "🛑 Bot Stopped!")
-
-# Start Flask and Bot
-if __name__ == "__main__":
-    threading.Thread(target=lambda: bot.polling(none_stop=True)).start()
-    app.run(host="0.0.0.0", port=5000)
+    # Run the Telegram Bot
+    run_bot()
