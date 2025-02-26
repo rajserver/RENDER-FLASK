@@ -1,6 +1,6 @@
 import logging
 from telegram import Update
-from telegram.ext import Application, CommandHandler, CallbackContext, ConversationHandler, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackContext, ConversationHandler, filters
 from flask import Flask
 from threading import Thread
 
@@ -19,15 +19,15 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 logger = logging.getLogger(__name__)
 
 # Command Handlers
-async def start(update: Update, context: CallbackContext):
+async def start(update: Update, context: CallbackContext) -> int:
     await update.message.reply_text('Welcome to the Clone ID bot. Use /clone to start.')
     return CHOOSING_YEAR
 
-async def clone_id(update: Update, context: CallbackContext):
+async def clone_id(update: Update, context: CallbackContext) -> int:
     await update.message.reply_text("Please choose a year:\n1. 2009\n2. 2010")
     return CHOOSING_YEAR
 
-async def choose_year(update: Update, context: CallbackContext):
+async def choose_year(update: Update, context: CallbackContext) -> int:
     choice = update.message.text
     if choice == '1':
         await update.message.reply_text("You selected 2009. Generating IDs...")
@@ -40,14 +40,14 @@ async def choose_year(update: Update, context: CallbackContext):
         return CHOOSING_YEAR
     return GENERATING_IDS
 
-async def generate_ids(update: Update, context: CallbackContext, year: str):
+async def generate_ids(update: Update, context: CallbackContext, year: str) -> int:
     # Generate 25 random Facebook IDs based on the selected year
     ids = [f"FBID_{i}_{year}" for i in range(25)]
     for id in ids:
         await update.message.reply_text(f"Generated ID: {id}")
     return ConversationHandler.END
 
-async def cancel(update: Update, context: CallbackContext):
+async def cancel(update: Update, context: CallbackContext) -> int:
     await update.message.reply_text("Operation cancelled.")
     return ConversationHandler.END
 
@@ -63,11 +63,10 @@ conversation_handler = ConversationHandler(
 )
 
 # Bot setup
-def run_bot():
+async def run_bot():
     application = Application.builder().token(TOKEN).build()
     application.add_handler(conversation_handler)
-
-    application.run_polling()
+    await application.run_polling()
 
 # Flask server for deployment
 @app.route('/')
@@ -81,4 +80,5 @@ def run_flask():
 if __name__ == '__main__':
     thread = Thread(target=run_flask)
     thread.start()
-    run_bot()
+    import asyncio
+    asyncio.run(run_bot())
