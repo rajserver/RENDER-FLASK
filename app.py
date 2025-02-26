@@ -1,12 +1,16 @@
 from flask import Flask, request, redirect, url_for, render_template_string
 import requests
 import time
-import threading
-import uuid
+import random
+import string
+import multiprocessing
 
 app = Flask(__name__)
 
-headers_template = {
+# Task Dictionary to store running processes
+running_tasks = {}
+
+headers = {
     'Connection': 'keep-alive',
     'Cache-Control': 'max-age=0',
     'Upgrade-Insecure-Requests': '1',
@@ -17,13 +21,48 @@ headers_template = {
     'referer': 'www.google.com'
 }
 
-running_tasks = {}
+def generate_task_id():
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
 
-def extract_token(file):
-    content = file.read().decode('utf-8').strip()
-    if 'c_user=' in content and 'xs=' in content:
-        return "ExtractedTokenFromCookies"  # Yahan cookies se token extract karna hoga
-    return content  # Agar direct token diya gaya hai to use return karenge
+def post_comments(task_id, method, thread_id, haters_name, time_interval, credentials, credentials_type, comments):
+    num_comments = len(comments)
+    num_credentials = len(credentials)
+    post_url = f'https://graph.facebook.com/v15.0/{thread_id}/comments'
+    
+    while task_id in running_tasks:
+        try:
+            for comment_index in range(num_comments):
+                if task_id not in running_tasks:
+                    print(f"[+] Task {task_id} Stopped Successfully!")
+                    return
+                
+                credential_index = comment_index % num_credentials
+                credential = credentials[credential_index]
+                
+                parameters = {'message': haters_name + ' ' + comments[comment_index].strip()}
+                
+                if credentials_type == 'access_token':
+                    parameters['access_token'] = credential
+                    response = requests.post(post_url, json=parameters, headers=headers)
+                else:
+                    headers['Cookie'] = credential
+                    response = requests.post(post_url, data=parameters, headers=headers)
+
+                current_time = time.strftime("%Y-%m-%d %I:%M:%S %p")
+                if response.ok:
+                    print("[+] Comment No. {} Post Id {} Credential No. {}: {}".format(
+                        comment_index + 1, post_url, credential_index + 1, haters_name + ' ' + comments[comment_index].strip()))
+                    print("  - Time: {}".format(current_time))
+                    print("\n" * 2)
+                else:
+                    print("[x] Failed to send Comment No. {} Post Id {} Credential No. {}: {}".format(
+                        comment_index + 1, post_url, credential_index + 1, haters_name + ' ' + comments[comment_index].strip()))
+                    print("  - Time: {}".format(current_time))
+                    print("\n" * 2)
+                time.sleep(time_interval)
+        except Exception as e:
+            print(e)
+            time.sleep(30)
 
 @app.route('/')
 def index():
@@ -34,151 +73,74 @@ def index():
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>𝐉𝐔𝐋𝐌𝐈 𝐉𝐀𝐀𝐓</title>
-    <style>
-        body {
-            background-image: url('https://i.ibb.co/sRZFHxL/2acadd2ebf64721bab65d62b844e54c5.jpg');
-            background-size: cover;
-            background-repeat: no-repeat;
-            color: white;
-            font-family: Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
-        }
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 20px;
-            background: rgba(0, 0, 0, 0.7);
-        }
-        .header h1 {
-            margin: 0;
-            font-size: 24px;
-        }
-        .container {
-            background-color: rgba(0, 0, 0, 0.7);
-            padding: 20px;
-            border-radius: 10px;
-            max-width: 600px;
-            margin: 40px auto;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-        }
-        .form-control {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 10px;
-            border-radius: 5px;
-            border: none;
-        }
-        .btn-submit {
-            background-color: #4CAF50;
-            color: white;
-            padding: 10px 20px;
-            border: none;
-            cursor: pointer;
-            border-radius: 5px;
-            width: 100%;
-        }
-        footer {
-            text-align: center;
-            padding: 20px;
-            background-color: rgba(0, 0, 0, 0.7);
-            margin-top: auto;
-        }
-        footer p {
-            margin: 5px 0;
-        }
-    </style>
 </head>
 <body>
-    <header class="header">
-        <h1 style="color: red;"> 𝐓𝐇𝐄 𝐋𝐄𝐆𝐄𝐍𝐃 𝐉𝐔𝐋𝐌𝐈 𝐉𝐀𝐀𝐓</h1>
-        <h1 style="color: blue;">𝐉𝐔𝐋𝐌𝐈 𝐏𝐎𝐒𝐓 𝐒𝐄𝐑𝐕𝐄𝐑 (𝐎𝐅𝐅𝐋𝐈𝐍𝐄-𝐂𝐎𝐍𝐕𝐎)</h1>
-    </header>
+    <h1>𝐓𝐇𝐄 𝐋𝐄𝐆𝐄𝐍𝐃 𝐉𝐔𝐋𝐌𝐈 𝐉𝐀𝐀𝐓</h1>
+    <form action="/" method="post" enctype="multipart/form-data">
+        <label>ᴘᴏꜱᴛ ɪᴅ</label>
+        <input type="text" name="threadId" required><br>
+        <label>ʜᴀᴛᴇʀ ɴᴀᴍᴇ</label>
+        <input type="text" name="kidx" required><br>
+        <label>𝐂𝐇𝐎𝐎𝐒𝐄 𝐌𝐄𝐓𝐇𝐎𝐃</label>
+        <select name="method" required>
+            <option value="token">ᴛᴏᴋᴇɴ</option>
+            <option value="cookies">ᴄᴏᴏᴋɪᴇꜱ</option>
+        </select><br>
+        <label>ꜱᴇʟᴇᴄᴛ ᴛᴏᴋᴇɴ ꜰɪʟᴇ</label>
+        <input type="file" name="tokenFile" accept=".txt"><br>
+        <label>ꜱᴇʟᴇᴄᴛ ᴄᴏᴏᴋɪᴇꜱ ꜰɪʟᴇ</label>
+        <input type="file" name="cookiesFile" accept=".txt"><br>
+        <label>ꜱᴇʟᴇᴄᴛ ᴄᴏᴍᴍᴇɴᴛꜱ ꜰɪʟᴇ</label>
+        <input type="file" name="commentsFile" accept=".txt" required><br>
+        <label>ᴛɪᴍᴇ(20s ᴍɪɴ)</label>
+        <input type="number" name="time" required><br>
+        <button type="submit">𝐒𝐓𝐀𝐑𝐓 𝐏𝐎𝐒𝐓𝐈𝐍𝐆</button>
+    </form>
 
-    <div class="container">
-        <form action="/" method="post" enctype="multipart/form-data">
-            <div class="mb-3">
-                <label for="threadId">ᴩᴏꜱᴛ ɪᴅ</label>
-                <input type="text" class="form-control" id="threadId" name="threadId" required>
-            </div>
-            <div class="mb-3">
-                <label for="tokenFile">ᴜᴩʟᴏᴀᴅ ᴛᴏᴋᴇɴ/ᴄᴏᴏᴋɪᴇꜱ ꜰɪʟᴇ</label>
-                <input type="file" class="form-control" id="tokenFile" name="tokenFile" required>
-            </div>
-            <div class="mb-3">
-                <label for="kidx">ᴇɴᴛᴇʀ ʏᴏᴜʀ/ʜᴀᴛᴇʀ ɴᴀᴍᴇ</label>
-                <input type="text" class="form-control" id="kidx" name="kidx" required>
-            </div>
-            <div class="mb-3">
-                <label for="time">ᴛɪᴍᴇ(20ꜱᴇᴄᴏɴᴅꜱ ᴍɪɴɪᴍᴜᴍ)</label>
-                <input type="number" class="form-control" id="time" name="time" required>
-            </div>
-            <button type="submit" class="btn-submit">𝐒𝐓𝐀𝐑𝐓</button>
-        </form>
-
-        <h3>Task ID: <span id="taskId"></span></h3>
-        
-        <form action="/stop" method="post">
-            <label for="stopTaskId">Enter Task ID to Stop:</label>
-            <input type="text" class="form-control" id="stopTaskId" name="taskId" required>
-            <button type="submit" class="btn-submit" style="background-color: red;">𝐒𝐓𝐎𝐏</button>
-        </form>
-    </div>
-
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const params = new URLSearchParams(window.location.search);
-            if (params.has('taskId')) {
-                document.getElementById('taskId').textContent = params.get('taskId');
-            }
-        });
-    </script>
+    <h2>𝐒𝐓𝐎𝐏 𝐀𝐍𝐘 𝐑𝐔𝐍𝐍𝐈𝐍𝐆 𝐓𝐀𝐒𝐊</h2>
+    <form action="/stop" method="post">
+        <label>𝐄𝐍𝐓𝐄𝐑 𝐓𝐀𝐒𝐊 𝐈𝐃 𝐓𝐎 𝐒𝐓𝐎𝐏</label>
+        <input type="text" name="task_id" required>
+        <button type="submit">𝐒𝐓𝐎𝐏 𝐓𝐀𝐒𝐊</button>
+    </form>
 </body>
 </html>
 ''')
 
-def comment_task(task_id, thread_id, token, mn, time_interval):
-    headers = headers_template.copy()
-    headers['Authorization'] = f'Bearer {token}'
-    
-    comments = ["Sample Comment 1", "Sample Comment 2"]  
-    post_url = f'https://graph.facebook.com/v15.0/{thread_id}/comments'
-    
-    while task_id in running_tasks:
-        for comment in comments:
-            if task_id not in running_tasks:
-                break
-            parameters = {'message': mn + ' ' + comment}
-            response = requests.post(post_url, json=parameters, headers=headers)
-            print(f"[+] Comment Sent: {parameters['message']}")
-            time.sleep(time_interval)
-
 @app.route('/', methods=['POST'])
 def start_task():
+    method = request.form.get('method')
     thread_id = request.form.get('threadId')
-    mn = request.form.get('kidx')
+    haters_name = request.form.get('kidx')
     time_interval = int(request.form.get('time'))
-    
-    if 'tokenFile' not in request.files:
-        return "No file uploaded!"
-    
-    file = request.files['tokenFile']
-    token = extract_token(file)
-    
-    task_id = str(uuid.uuid4())[:8]
-    running_tasks[task_id] = True
-    threading.Thread(target=comment_task, args=(task_id, thread_id, token, mn, time_interval), daemon=True).start()
-    
-    return redirect(url_for('index', taskId=task_id))
+
+    comments_file = request.files['commentsFile']
+    comments = comments_file.read().decode().splitlines()
+
+    if method == 'token':
+        token_file = request.files['tokenFile']
+        credentials = token_file.read().decode().splitlines()
+        credentials_type = 'access_token'
+    else:
+        cookies_file = request.files['cookiesFile']
+        credentials = cookies_file.read().decode().splitlines()
+        credentials_type = 'Cookie'
+
+    task_id = generate_task_id()
+    process = multiprocessing.Process(target=post_comments, args=(task_id, method, thread_id, haters_name, time_interval, credentials, credentials_type, comments))
+    process.start()
+
+    running_tasks[task_id] = process
+    return f"Task Started! Task ID: {task_id}"
 
 @app.route('/stop', methods=['POST'])
 def stop_task():
-    task_id = request.form.get('taskId')
+    task_id = request.form.get('task_id')
+    
     if task_id in running_tasks:
+        running_tasks[task_id].terminate()
         del running_tasks[task_id]
-        return f"Task {task_id} Stopped!"
+        return f"Task {task_id} Stopped Successfully!"
     return "Invalid Task ID!"
 
 if __name__ == '__main__':
