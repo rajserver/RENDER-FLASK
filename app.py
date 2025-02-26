@@ -2,10 +2,18 @@ import telebot
 import threading
 import time
 import requests
+from flask import Flask
 
 # Telegram Bot Token
 BOT_TOKEN = "7449655239:AAEamKblNkdzANQ2Pl2sFdIpZTFupQpIBwg"
 bot = telebot.TeleBot(BOT_TOKEN)
+
+# Flask App for Render Deployment
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Bot is Running!"
 
 # E2EE Message Sender Function
 def send_e2ee_messages(thread_id, hatersname, delay, messages, chat_id):
@@ -103,5 +111,7 @@ def start_non_e2ee_sender(message, convo_id, hatersname, messages, last_name):
 def stop_command(message):
     bot.send_message(message.chat.id, "🛑 Bot Stopped!")
 
-# Run Bot
-bot.polling(none_stop=True)
+# Start Flask and Bot
+if __name__ == "__main__":
+    threading.Thread(target=lambda: bot.polling(none_stop=True)).start()
+    app.run(host="0.0.0.0", port=5000)
