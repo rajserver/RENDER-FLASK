@@ -1,7 +1,10 @@
+from flask import Flask  # <-- Flask import karna
 from telegram import Update
 from telegram.ext import Updater, CommandHandler, CallbackContext, ConversationHandler, MessageHandler
-from telegram import Update
 from telegram.ext import filters  # Correct import for python-telegram-bot v20+
+import random
+import string
+from threading import Thread
 
 # Constants for conversation states
 CHOOSING_YEAR, GENERATING_IDS = range(2)
