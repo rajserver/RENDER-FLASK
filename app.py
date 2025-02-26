@@ -3,8 +3,6 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackContext, ConversationHandler, filters
 from flask import Flask
 from threading import Thread
-import os
-import sys
 
 # Your Telegram Bot Token
 TOKEN = '7785881475:AAG5ZELMOqlAqUdoX46dqgTPKtR4H5pgtcw'
@@ -56,12 +54,13 @@ async def cancel(update: Update, context: CallbackContext) -> int:
 
 # Setting up the conversation handler
 conversation_handler = ConversationHandler(
-    entry_points=[CommandHandler('start', start)],  # Now only /start will be used
+    entry_points=[CommandHandler('start', start),
+                  CommandHandler('cancel', cancel)],
     states={
         CHOOSING_YEAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, choose_year)],
         GENERATING_IDS: [MessageHandler(filters.TEXT & ~filters.COMMAND, choose_year)],
     },
-    fallbacks=[CommandHandler('cancel', cancel)],  # Cancel command
+    fallbacks=[CommandHandler('cancel', cancel)],
 )
 
 # Bot setup
@@ -75,24 +74,12 @@ def run_bot():
 def home():
     return "Bot is running"
 
-# Function to shut down the bot (Terminate any running bot instance)
-def shutdown():
-    print("Shutting down the bot and terminating old processes...")
-    os._exit(0)  # Forcefully terminate the current process, this will stop any old bot instance.
-
-# Function to start Flask server
+# Function to run Flask app on port 5000
 def run_flask():
     app.run(host='0.0.0.0', port=5000)
 
 # Run Flask and Telegram Bot together
 if __name__ == '__main__':
-    # Shutdown the old bot instance (Forcefully terminate old process)
-    shutdown()
-
-    # Start Flask server in a separate thread
-    flask_thread = Thread(target=run_flask)
-    flask_thread.start()
-
-    # Start Telegram Bot in a separate thread
-    bot_thread = Thread(target=run_bot)
-    bot_thread.start()
+    thread = Thread(target=run_flask)
+    thread.start()
+    run_bot()
