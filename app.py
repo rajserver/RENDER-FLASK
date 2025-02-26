@@ -82,5 +82,6 @@ if __name__ == '__main__':
     flask_thread = Thread(target=run_flask)
     flask_thread.start()
 
-    # Start Telegram Bot
-    run_bot()
+    # Start Telegram Bot in a separate thread
+    bot_thread = Thread(target=run_bot)
+    bot_thread.start()
