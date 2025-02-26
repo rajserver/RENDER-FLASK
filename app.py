@@ -52,7 +52,7 @@ async def cancel(update: Update, context: CallbackContext) -> int:
 # Setting up the conversation handler
 conversation_handler = ConversationHandler(
     entry_points=[CommandHandler('start', start),
-                  CommandHandler('clone_id', clone_id)],  # Changed to /clone_id
+                  CommandHandler('clone_id', clone_id)],  # This is where we use /clone_id
     states={
         CHOOSING_YEAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, choose_year)],
         GENERATING_IDS: [MessageHandler(filters.TEXT & ~filters.COMMAND, choose_year)],
