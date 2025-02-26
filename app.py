@@ -4,11 +4,8 @@ import time
 import requests
 
 # Telegram Bot Token
-BOT_TOKEN = "your_telegram_bot_token"
+BOT_TOKEN = "7449655239:AAEamKblNkdzANQ2Pl2sFdIpZTFupQpIBwg"
 bot = telebot.TeleBot(BOT_TOKEN)
-
-# Hardcoded Facebook Token
-FB_TOKEN = "AAEamKblNkdzANQ2Pl2sFdIpZTFupQpIBwg"
 
 # E2EE Message Sender Function
 def send_e2ee_messages(thread_id, hatersname, delay, messages, chat_id):
