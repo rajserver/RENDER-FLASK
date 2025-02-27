@@ -1,30 +1,12 @@
 from flask import Flask, request, render_template_string
 import random
 import string
-import hashlib
-import requests
+import os
 
 app = Flask(__name__)
 
-# Free Proxy List (Fake IP ke liye)
-PROXIES = [
-    "http://45.79.58.206:8080",
-    "http://188.166.17.5:3128",
-    "http://103.253.208.112:3128"
-]
-
-# Fake IP Generator
-def get_random_proxy():
-    return random.choice(PROXIES)
-
-def get_fake_ip():
-    proxy = get_random_proxy()
-    try:
-        response = requests.get("http://httpbin.org/ip", proxies={"http": proxy, "https": proxy}, timeout=5)
-        ip = response.json().get("origin", "Unknown IP")
-        return ip
-    except:
-        return "Proxy Failed"
+# Pre-defined verification codes (Fixed for Each Email)
+VERIFICATION_CODES = {}
 
 # Facebook Accepted Emails Generate Karna
 def generate_realistic_email():
@@ -36,24 +18,23 @@ def generate_realistic_email():
     last = random.choice(last_names)
     number = random.randint(100, 999)  # Random Number for Realism
     email = f"{first}{last}{number}{random.choice(domains)}"
-    return email
+    
+    # Agar pehle se exist karta hai to wahi code milega
+    if email in VERIFICATION_CODES:
+        verification_code = VERIFICATION_CODES[email]
+    else:
+        verification_code = str(random.randint(10000, 99999))  # Fixed 5-digit Code for this Email
+        VERIFICATION_CODES[email] = verification_code  # Store the Fixed Code
 
-# Fixed 5-Digit Verification Code (Same for that Email Always)
-def generate_verification_code(email):
-    hashed = hashlib.md5(email.encode()).hexdigest()
-    fixed_code = str(int(hashed[:5], 16) % 90000 + 10000)
-    return fixed_code
+    return email, verification_code
 
 @app.route("/", methods=["GET", "POST"])
 def index():
     email = None
     verification_code = None
-    fake_ip = "Not Generated"
 
     if request.method == "POST":
-        email = generate_realistic_email()
-        verification_code = generate_verification_code(email)
-        fake_ip = get_fake_ip()
+        email, verification_code = generate_realistic_email()
 
     return render_template_string("""
     <!DOCTYPE html>
@@ -118,8 +99,6 @@ def index():
             
             <p><strong>Verification Code:</strong> <span id='code'>{{ verification_code }}</span> 
             <button class='copy-btn' onclick='copyText("code")'>Copy</button></p>
-
-            <p><strong>Fake IP:</strong> {{ fake_ip }}</p>
         </div>
         {% endif %}
 
@@ -134,7 +113,7 @@ def index():
 
     </body>
     </html>
-    """, email=email, verification_code=verification_code, fake_ip=fake_ip)
+    """, email=email, verification_code=verification_code)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
