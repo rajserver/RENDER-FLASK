@@ -1,65 +1,68 @@
-from flask import Flask, request, render_template_string
+from flask import Flask, request
 import requests
-import random
-import time
+from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 
-# Temporary Email API
-EMAIL_API = "https://www.1secmail.com/api/v1/"
-EMAIL_DOMAIN = "1secmail.com"
-
-# Generate Random Email
-def generate_email():
-    username = ''.join(random.choices("abcdefghijklmnopqrstuvwxyz1234567890", k=10))
-    email = f"{username}@{EMAIL_DOMAIN}"
-    return email, username
-
-# Fetch OTP From Email Inbox
-def fetch_otp(username):
-    time.sleep(5)  # Wait for OTP to arrive
+# Function to get linked Facebook accounts
+def get_facebook_accounts(user_input):
     try:
-        inbox = requests.get(f"{EMAIL_API}?action=getMessages&login={username}&domain={EMAIL_DOMAIN}").json()
-        if inbox:
-            msg_id = inbox[0]['id']
-            msg = requests.get(f"{EMAIL_API}?action=readMessage&login={username}&domain={EMAIL_DOMAIN}&id={msg_id}").json()
-            otp = ''.join(filter(str.isdigit, msg['textBody']))
-            return otp
-    except:
-        pass
-    return "Waiting for OTP..."
+        search_url = f"https://www.facebook.com/login/identify/?ctx=recover&search_attempts=1&alternate_search=1&email={user_input}"
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.212 Mobile Safari/537.36"
+        }
+        
+        session = requests.Session()
+        response = session.get(search_url, headers=headers)
+        soup = BeautifulSoup(response.text, "html.parser")
 
+        accounts = []
+        for div in soup.find_all("div", class_="pam"):
+            name = div.find("strong")
+            profile_link = div.find("a")
+            if name and profile_link and "href" in profile_link.attrs:
+                profile_url = "https://www.facebook.com" + profile_link["href"]
+                accounts.append({"name": name.text, "profile_url": profile_url})
+        
+        return accounts
+    except:
+        return []
+
+# Flask Route
 @app.route("/", methods=["GET", "POST"])
 def index():
-    email = otp = None
+    result_html = ""
     if request.method == "POST":
-        email, username = generate_email()
-        otp = fetch_otp(username)
+        user_input = request.form["user_input"]
+        accounts = get_facebook_accounts(user_input)
 
-    return render_template_string("""
-    <html>
+        if accounts:
+            result_html += "<h3>Linked Accounts Found:</h3><ul>"
+            for acc in accounts:
+                result_html += f'<li><strong>{acc["name"]}</strong> - <a href="{acc["profile_url"]}" target="_blank">View Profile</a></li>'
+            result_html += "</ul>"
+        else:
+            result_html = "<h3>No linked accounts found.</h3>"
+
+    return f"""
+    <!DOCTYPE html>
+    <html lang="en">
     <head>
-        <title>FB Auto-Verified Email</title>
-        <style>
-            body { background: black; color: white; text-align: center; }
-            .box { padding: 10px; border: 1px solid red; display: inline-block; }
-            button { background: red; color: white; padding: 5px 10px; border: none; }
-        </style>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>FB ID Finder</title>
     </head>
     <body>
-        <h1>🔥 FB Auto-Verified Email 🔥</h1>
-        <form method="POST">
-            <button type="submit">Generate Email</button>
+        <h2>Find Facebook IDs Linked to Your Email/Phone</h2>
+        <form method="post">
+            <input type="text" name="user_input" placeholder="Enter Email or Phone" required>
+            <button type="submit">Find Accounts</button>
         </form>
-        {% if email %}
-        <div class="box">
-            <p>Email: <b>{{ email }}</b></p>
-            <p>OTP: <b>{{ otp }}</b></p>
-        </div>
-        {% endif %}
+        {result_html}
     </body>
     </html>
-    """, email=email, otp=otp)
+    """
 
+# Run Flask App on Mobile
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
