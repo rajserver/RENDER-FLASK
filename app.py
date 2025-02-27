@@ -2,34 +2,21 @@ from flask import Flask, request
 import random
 import string
 import hashlib
-import requests  # Proxy ke liye
+import requests
 
 app = Flask(__name__)
 
-# Free Proxy List (Agar koi premium proxy hai to use kar sakte ho)
+# Free Proxy List (Fake IP ke liye)
 PROXIES = [
     "http://45.79.58.206:8080",
     "http://188.166.17.5:3128",
     "http://103.253.208.112:3128"
 ]
 
-# Random Proxy Select Karega
+# Fake IP Generator
 def get_random_proxy():
     return random.choice(PROXIES)
 
-# Random Email Generate Karna
-def generate_random_email():
-    domains = ["@tempmail.net", "@mailinator.com", "@yopmail.com"]
-    random_name = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
-    email = random_name + random.choice(domains)
-    return email
-
-# Fixed Verification Code Generate Karna
-def generate_verification_code(email):
-    hashed = hashlib.md5(email.encode()).hexdigest()
-    return hashed[:6]
-
-# Proxy ke through request bhejna (Fake IP ke liye)
 def get_fake_ip():
     proxy = get_random_proxy()
     try:
@@ -39,7 +26,24 @@ def get_fake_ip():
     except:
         return "Proxy Failed"
 
-# Main Flask Route
+# Facebook Accepted Emails Generate Karna
+def generate_realistic_email():
+    domains = ["@outlook.com", "@hotmail.com", "@gmail.com", "@yahoo.com", "@aol.com", "@protonmail.com"]
+    first_names = ["raj", "vikas", "priya", "ravi", "anita", "amit", "rahul", "deepak"]
+    last_names = ["sharma", "verma", "kumar", "yadav", "patel", "gupta", "singh", "joshi"]
+    
+    first = random.choice(first_names)
+    last = random.choice(last_names)
+    number = random.randint(100, 999)  # Random Number for Realism
+    email = f"{first}{last}{number}{random.choice(domains)}"
+    return email
+
+# Fixed 5-Digit Verification Code (Same for that Email Always)
+def generate_verification_code(email):
+    hashed = hashlib.md5(email.encode()).hexdigest()
+    fixed_code = str(int(hashed[:5], 16) % 90000 + 10000)
+    return fixed_code
+
 @app.route("/", methods=["GET", "POST"])
 def index():
     email = None
@@ -47,9 +51,9 @@ def index():
     fake_ip = "Not Generated"
 
     if request.method == "POST":
-        email = generate_random_email()
+        email = generate_realistic_email()
         verification_code = generate_verification_code(email)
-        fake_ip = get_fake_ip()  # Proxy ke through naya IP
+        fake_ip = get_fake_ip()
 
     return f"""
     <!DOCTYPE html>
@@ -57,7 +61,7 @@ def index():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Facebook Email Generator</title>
+        <title>FB Account Email Generator</title>
         <style>
             body {{
                 font-family: Arial, sans-serif;
@@ -86,21 +90,45 @@ def index():
                 border-radius: 10px;
                 box-shadow: 0 0 15px rgba(255, 0, 0, 0.7);
             }}
+            .copy-btn {{
+                background-color: #007bff;
+                color: white;
+                padding: 5px 10px;
+                border: none;
+                cursor: pointer;
+                font-size: 14px;
+                margin-left: 10px;
+            }}
+            .copy-btn:hover {{
+                background-color: #0056b3;
+            }}
         </style>
     </head>
     <body>
 
-        <h1>🔥 Facebook Email Generator 🔥</h1>
+        <h1>🔥 FB Account Email Generator 🔥</h1>
         <form method="POST">
             <button type="submit">Generate Facebook Email</button>
         </form>
 
-        {"<div class='box'><p><strong>Email:</strong> " + email + "</p><p><strong>Verification Code:</strong> " + verification_code + "</p><p><strong>Fake IP:</strong> " + fake_ip + "</p></div>" if email else ""}
-    
+        {"<div class='box'>"
+        "<p><strong>Email:</strong> <span id='email'>" + email + "</span> <button class='copy-btn' onclick='copyText(\"email\")'>Copy</button></p>"
+        "<p><strong>Verification Code:</strong> <span id='code'>" + verification_code + "</span> <button class='copy-btn' onclick='copyText(\"code\")'>Copy</button></p>"
+        "<p><strong>Fake IP:</strong> " + fake_ip + "</p>"
+        "</div>" if email else ""}
+        
+        <script>
+            function copyText(id) {{
+                var text = document.getElementById(id).innerText;
+                navigator.clipboard.writeText(text).then(function() {{
+                    alert("Copied: " + text);
+                }});
+            }}
+        </script>
+
     </body>
     </html>
     """
 
-# Flask Run on Port 5000
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
