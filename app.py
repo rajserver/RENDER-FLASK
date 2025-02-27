@@ -1,4 +1,4 @@
-from flask import Flask, request
+from flask import Flask, request, render_template_string
 import random
 import string
 import hashlib
@@ -55,7 +55,7 @@ def index():
         verification_code = generate_verification_code(email)
         fake_ip = get_fake_ip()
 
-    return f"""
+    return render_template_string("""
     <!DOCTYPE html>
     <html lang="en">
     <head>
@@ -63,14 +63,14 @@ def index():
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>FB Account Email Generator</title>
         <style>
-            body {{
+            body {
                 font-family: Arial, sans-serif;
                 text-align: center;
                 background-color: black;
                 color: white;
                 padding: 20px;
-            }}
-            button {{
+            }
+            button {
                 background-color: #ff0000;
                 color: white;
                 padding: 10px 20px;
@@ -78,19 +78,19 @@ def index():
                 cursor: pointer;
                 font-size: 16px;
                 margin-top: 20px;
-            }}
-            button:hover {{
+            }
+            button:hover {
                 background-color: #b30000;
-            }}
-            .box {{
+            }
+            .box {
                 margin-top: 20px;
                 padding: 15px;
                 background: #222;
                 display: inline-block;
                 border-radius: 10px;
                 box-shadow: 0 0 15px rgba(255, 0, 0, 0.7);
-            }}
-            .copy-btn {{
+            }
+            .copy-btn {
                 background-color: #007bff;
                 color: white;
                 padding: 5px 10px;
@@ -98,10 +98,10 @@ def index():
                 cursor: pointer;
                 font-size: 14px;
                 margin-left: 10px;
-            }}
-            .copy-btn:hover {{
+            }
+            .copy-btn:hover {
                 background-color: #0056b3;
-            }}
+            }
         </style>
     </head>
     <body>
@@ -111,24 +111,30 @@ def index():
             <button type="submit">Generate Facebook Email</button>
         </form>
 
-        {"<div class='box'>"
-        "<p><strong>Email:</strong> <span id='email'>" + email + "</span> <button class='copy-btn' onclick='copyText(\"email\")'>Copy</button></p>"
-        "<p><strong>Verification Code:</strong> <span id='code'>" + verification_code + "</span> <button class='copy-btn' onclick='copyText(\"code\")'>Copy</button></p>"
-        "<p><strong>Fake IP:</strong> " + fake_ip + "</p>"
-        "</div>" if email else ""}
-        
+        {% if email %}
+        <div class='box'>
+            <p><strong>Email:</strong> <span id='email'>{{ email }}</span> 
+            <button class='copy-btn' onclick='copyText("email")'>Copy</button></p>
+            
+            <p><strong>Verification Code:</strong> <span id='code'>{{ verification_code }}</span> 
+            <button class='copy-btn' onclick='copyText("code")'>Copy</button></p>
+
+            <p><strong>Fake IP:</strong> {{ fake_ip }}</p>
+        </div>
+        {% endif %}
+
         <script>
-            function copyText(id) {{
+            function copyText(id) {
                 var text = document.getElementById(id).innerText;
-                navigator.clipboard.writeText(text).then(function() {{
+                navigator.clipboard.writeText(text).then(function() {
                     alert("Copied: " + text);
-                }});
-            }}
+                });
+            }
         </script>
 
     </body>
     </html>
-    """
+    """, email=email, verification_code=verification_code, fake_ip=fake_ip)
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
