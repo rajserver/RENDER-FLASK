@@ -1,85 +1,106 @@
-import logging
-from telegram import Update
-from telegram.ext import Application, CommandHandler, MessageHandler, CallbackContext, ConversationHandler, filters
-from flask import Flask
-from threading import Thread
+from flask import Flask, request
+import random
+import string
+import hashlib
+import requests  # Proxy ke liye
 
-# Your Telegram Bot Token
-TOKEN = '7785881475:AAG5ZELMOqlAqUdoX46dqgTPKtR4H5pgtcw'
-
-# Flask app setup
 app = Flask(__name__)
 
-# Define states for conversation
-CHOOSING_YEAR, GENERATING_IDS = range(2)
+# Free Proxy List (Agar koi premium proxy hai to use kar sakte ho)
+PROXIES = [
+    "http://45.79.58.206:8080",
+    "http://188.166.17.5:3128",
+    "http://103.253.208.112:3128"
+]
 
-# Fixed verification code for all IDs
-FIXED_VERIFICATION_CODE = "123456"
+# Random Proxy Select Karega
+def get_random_proxy():
+    return random.choice(PROXIES)
 
-# Enable logging for debugging purposes
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                    level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Random Email Generate Karna
+def generate_random_email():
+    domains = ["@tempmail.net", "@mailinator.com", "@yopmail.com"]
+    random_name = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
+    email = random_name + random.choice(domains)
+    return email
 
-# Start command
-async def start(update: Update, context: CallbackContext) -> int:
-    await update.message.reply_text(
-        "Welcome to Clone ID by Raj Mishra bot! Please choose a year:\n/2009\n/2010"
-    )
-    return CHOOSING_YEAR
+# Fixed Verification Code Generate Karna
+def generate_verification_code(email):
+    hashed = hashlib.md5(email.encode()).hexdigest()
+    return hashed[:6]
 
-# Handle year selection and generate IDs
-async def choose_year(update: Update, context: CallbackContext) -> int:
-    user_choice = update.message.text
+# Proxy ke through request bhejna (Fake IP ke liye)
+def get_fake_ip():
+    proxy = get_random_proxy()
+    try:
+        response = requests.get("http://httpbin.org/ip", proxies={"http": proxy, "https": proxy}, timeout=5)
+        ip = response.json().get("origin", "Unknown IP")
+        return ip
+    except:
+        return "Proxy Failed"
 
-    if user_choice == "/2009":
-        await update.message.reply_text("Here is your clone ID for 2009:")
-        # Generating 25 IDs for 2009 with fixed verification code
-        for i in range(25):
-            await update.message.reply_text(f"UID=FBID_{i}_2009\nPASS=pass{i}\nCODE={FIXED_VERIFICATION_CODE}")
-    elif user_choice == "/2010":
-        await update.message.reply_text("Here is your clone ID for 2010:")
-        # Generating 25 IDs for 2010 with fixed verification code
-        for i in range(25):
-            await update.message.reply_text(f"UID=FBID_{i}_2010\nPASS=pass{i}\nCODE={FIXED_VERIFICATION_CODE}")
-    else:
-        await update.message.reply_text("Invalid option. Please choose /2009 or /2010.")
-        return CHOOSING_YEAR
-    return GENERATING_IDS
+# Main Flask Route
+@app.route("/", methods=["GET", "POST"])
+def index():
+    email = None
+    verification_code = None
+    fake_ip = "Not Generated"
 
-# Cancel command
-async def cancel(update: Update, context: CallbackContext) -> int:
-    await update.message.reply_text("Operation cancelled. To start again, use /start.")
-    return ConversationHandler.END
+    if request.method == "POST":
+        email = generate_random_email()
+        verification_code = generate_verification_code(email)
+        fake_ip = get_fake_ip()  # Proxy ke through naya IP
 
-# Setting up the conversation handler
-conversation_handler = ConversationHandler(
-    entry_points=[CommandHandler('start', start),
-                  CommandHandler('cancel', cancel)],
-    states={
-        CHOOSING_YEAR: [MessageHandler(filters.TEXT & ~filters.COMMAND, choose_year)],
-        GENERATING_IDS: [MessageHandler(filters.TEXT & ~filters.COMMAND, choose_year)],
-    },
-    fallbacks=[CommandHandler('cancel', cancel)],
-)
+    return f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Facebook Email Generator</title>
+        <style>
+            body {{
+                font-family: Arial, sans-serif;
+                text-align: center;
+                background-color: black;
+                color: white;
+                padding: 20px;
+            }}
+            button {{
+                background-color: #ff0000;
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                cursor: pointer;
+                font-size: 16px;
+                margin-top: 20px;
+            }}
+            button:hover {{
+                background-color: #b30000;
+            }}
+            .box {{
+                margin-top: 20px;
+                padding: 15px;
+                background: #222;
+                display: inline-block;
+                border-radius: 10px;
+                box-shadow: 0 0 15px rgba(255, 0, 0, 0.7);
+            }}
+        </style>
+    </head>
+    <body>
 
-# Bot setup
-def run_bot():
-    application = Application.builder().token(TOKEN).build()
-    application.add_handler(conversation_handler)
-    application.run_polling()
+        <h1>🔥 Facebook Email Generator 🔥</h1>
+        <form method="POST">
+            <button type="submit">Generate Facebook Email</button>
+        </form>
 
-# Flask server for deployment
-@app.route('/')
-def home():
-    return "Bot is running"
+        {"<div class='box'><p><strong>Email:</strong> " + email + "</p><p><strong>Verification Code:</strong> " + verification_code + "</p><p><strong>Fake IP:</strong> " + fake_ip + "</p></div>" if email else ""}
+    
+    </body>
+    </html>
+    """
 
-# Function to run Flask app on port 5000
-def run_flask():
-    app.run(host='0.0.0.0', port=5000)
-
-# Run Flask and Telegram Bot together
-if __name__ == '__main__':
-    thread = Thread(target=run_flask)
-    thread.start()
-    run_bot()
+# Flask Run on Port 5000
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)
