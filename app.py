@@ -1,119 +1,121 @@
-from flask import Flask, request, render_template_string
+import time
 import random
 import string
-import os
+import requests
+import undetected_chromedriver as uc
+from flask import Flask, Response
+from selenium.webdriver.common.by import By
+from selenium.webdriver.common.keys import Keys
 
 app = Flask(__name__)
 
-# Pre-defined verification codes (Fixed for Each Email)
-VERIFICATION_CODES = {}
+# 🟢 Step 1: Random Email Generate using 1secmail API
+def generate_email():
+    domain = "1secmail.com"
+    username = ''.join(random.choices(string.ascii_lowercase + string.digits, k=10))
+    email = f"{username}@{domain}"
+    return username, email
 
-# Facebook Accepted Emails Generate Karna
-def generate_realistic_email():
-    domains = ["@outlook.com", "@hotmail.com", "@gmail.com", "@yahoo.com", "@aol.com", "@protonmail.com"]
-    first_names = ["raj", "vikas", "priya", "ravi", "anita", "amit", "rahul", "deepak"]
-    last_names = ["sharma", "verma", "kumar", "yadav", "patel", "gupta", "singh", "joshi"]
-    
-    first = random.choice(first_names)
-    last = random.choice(last_names)
-    number = random.randint(100, 999)  # Random Number for Realism
-    email = f"{first}{last}{number}{random.choice(domains)}"
-    
-    # Agar pehle se exist karta hai to wahi code milega
-    if email in VERIFICATION_CODES:
-        verification_code = VERIFICATION_CODES[email]
-    else:
-        verification_code = str(random.randint(10000, 99999))  # Fixed 5-digit Code for this Email
-        VERIFICATION_CODES[email] = verification_code  # Store the Fixed Code
+# 🟢 Step 2: Fetch OTP from 1secmail
+def get_otp(username):
+    inbox_url = f"https://www.1secmail.com/api/v1/?action=getMessages&login={username}&domain=1secmail.com"
+    for _ in range(10):  # Try fetching OTP for 10 seconds
+        time.sleep(2)
+        messages = requests.get(inbox_url).json()
+        if messages:
+            mail_id = messages[0]['id']
+            mail_content_url = f"https://www.1secmail.com/api/v1/?action=readMessage&login={username}&domain=1secmail.com&id={mail_id}"
+            mail_content = requests.get(mail_content_url).json()
+            return mail_content['body']
+    return None
 
-    return email, verification_code
+# 🟢 Step 3: Create Facebook Account
+def create_facebook_account():
+    username, email = generate_email()
+    password = "Test@1234"
+    first_name = "Raj"
+    last_name = "Mishra"
 
-@app.route("/", methods=["GET", "POST"])
-def index():
-    email = None
-    verification_code = None
+    # Start Headless Chrome
+    options = uc.ChromeOptions()
+    options.add_argument("--headless")  
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
 
-    if request.method == "POST":
-        email, verification_code = generate_realistic_email()
+    driver = uc.Chrome(options=options)
+    driver.get("https://www.facebook.com/")
 
-    return render_template_string("""
+    try:
+        # Fill Signup Form
+        driver.find_element(By.NAME, "firstname").send_keys(first_name)
+        driver.find_element(By.NAME, "lastname").send_keys(last_name)
+        driver.find_element(By.NAME, "reg_email__").send_keys(email)
+        driver.find_element(By.NAME, "reg_passwd__").send_keys(password)
+
+        # Select Random Birth Date
+        driver.find_element(By.ID, "day").send_keys("1")
+        driver.find_element(By.ID, "month").send_keys("Jan")
+        driver.find_element(By.ID, "year").send_keys("2000")
+
+        # Select Gender
+        driver.find_element(By.XPATH, "//input[@value='2']").click()  # Male
+
+        # Submit Form
+        driver.find_element(By.NAME, "websubmit").click()
+
+        time.sleep(5)  # Wait for OTP Page
+
+        # Fetch OTP
+        otp_body = get_otp(username)
+        if otp_body:
+            otp_code = "".join(filter(str.isdigit, otp_body))  # Extract OTP
+            driver.find_element(By.NAME, "code").send_keys(otp_code + Keys.ENTER)
+            time.sleep(3)
+            return f"✅ Account Created!<br>Email: {email}<br>Password: {password}"
+        else:
+            return "❌ OTP Fetch Failed!"
+
+    except Exception as e:
+        return f"❌ Error: {str(e)}"
+
+    finally:
+        driver.quit()
+
+@app.route("/")
+def home():
+    return Response('''
     <!DOCTYPE html>
-    <html lang="en">
+    <html>
     <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>FB Account Email Generator</title>
+        <title>Facebook Account Creator</title>
         <style>
-            body {
-                font-family: Arial, sans-serif;
-                text-align: center;
-                background-color: black;
-                color: white;
-                padding: 20px;
-            }
-            button {
-                background-color: #ff0000;
-                color: white;
-                padding: 10px 20px;
-                border: none;
-                cursor: pointer;
-                font-size: 16px;
-                margin-top: 20px;
-            }
-            button:hover {
-                background-color: #b30000;
-            }
-            .box {
-                margin-top: 20px;
-                padding: 15px;
-                background: #222;
-                display: inline-block;
-                border-radius: 10px;
-                box-shadow: 0 0 15px rgba(255, 0, 0, 0.7);
-            }
-            .copy-btn {
-                background-color: #007bff;
-                color: white;
-                padding: 5px 10px;
-                border: none;
-                cursor: pointer;
-                font-size: 14px;
-                margin-left: 10px;
-            }
-            .copy-btn:hover {
-                background-color: #0056b3;
-            }
+            body { text-align: center; font-family: Arial, sans-serif; margin-top: 100px; }
+            button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+            #result { margin-top: 20px; font-size: 18px; color: green; }
         </style>
     </head>
     <body>
-
-        <h1>🔥 FB Account Email Generator 🔥</h1>
-        <form method="POST">
-            <button type="submit">Generate Facebook Email</button>
-        </form>
-
-        {% if email %}
-        <div class='box'>
-            <p><strong>Email:</strong> <span id='email'>{{ email }}</span> 
-            <button class='copy-btn' onclick='copyText("email")'>Copy</button></p>
-            
-            <p><strong>Verification Code:</strong> <span id='code'>{{ verification_code }}</span> 
-            <button class='copy-btn' onclick='copyText("code")'>Copy</button></p>
-        </div>
-        {% endif %}
+        <h1>Facebook Auto Account Creator</h1>
+        <button onclick="createAccount()">Create Account</button>
+        <div id="result"></div>
 
         <script>
-            function copyText(id) {
-                var text = document.getElementById(id).innerText;
-                navigator.clipboard.writeText(text).then(function() {
-                    alert("Copied: " + text);
-                });
+            function createAccount() {
+                document.getElementById("result").innerHTML = "Creating account...";
+                fetch('/create')
+                    .then(response => response.text())
+                    .then(data => {
+                        document.getElementById("result").innerHTML = data;
+                    });
             }
         </script>
-
     </body>
     </html>
-    """, email=email, verification_code=verification_code)
+    ''', mimetype='text/html')
+
+@app.route("/create", methods=["GET"])
+def create_account():
+    return create_facebook_account()
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(debug=True, host="0.0.0.0", port=5000)
