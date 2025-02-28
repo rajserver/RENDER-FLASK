@@ -61,10 +61,20 @@ html_content = """
     .tab-content.active {
       display: block;
     }
-    iframe {
-      width: 100%;
-      height: calc(100vh - 120px);
-      border: none;
+    .fb-btn {
+      display: block;
+      width: 200px;
+      margin: 20px auto;
+      padding: 10px;
+      background-color: #4267B2;
+      color: white;
+      text-align: center;
+      text-decoration: none;
+      border-radius: 5px;
+      font-size: 18px;
+    }
+    .fb-btn:hover {
+      background-color: #365899;
     }
     .toggle-btn {
       background-color: #fff;
@@ -86,19 +96,18 @@ html_content = """
     <button class="tablink" onclick="openTab(event, 'tab2')">Account 2</button>
   </div>
   <div id="tab1" class="tab-content active">
-    <iframe src="https://m.facebook.com/lite" allow="camera; microphone"></iframe>
+    <a class="fb-btn" href="https://m.facebook.com/lite" target="_blank">Open Facebook Lite (Acc 1)</a>
   </div>
   <div id="tab2" class="tab-content">
-    <iframe src="https://m.facebook.com/lite" allow="camera; microphone"></iframe>
+    <a class="fb-btn" href="https://m.facebook.com/lite" target="_blank">Open Facebook Lite (Acc 2)</a>
   </div>
   <script>
-    // Toggle dark mode by adding/removing the "dark-mode" class
+    // Toggle dark mode
     function toggleDarkMode() {
       document.body.classList.toggle('dark-mode');
-      var header = document.getElementById('header');
-      header.classList.toggle('dark-mode');
+      document.getElementById('header').classList.toggle('dark-mode');
     }
-    // Function to switch between tabs
+    // Tab switching
     function openTab(evt, tabName) {
       var i, tabcontent, tablinks;
       tabcontent = document.getElementsByClassName("tab-content");
@@ -122,5 +131,4 @@ def home():
     return render_template_string(html_content)
 
 if __name__ == '__main__':
-    # Host on 0.0.0.0 and port 5000 (agar port change karna ho to modify kar sakte ho)
     app.run(host="0.0.0.0", port=5000, debug=True)
