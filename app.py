@@ -7,119 +7,143 @@ html_content = """
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Facebook Lite Clone</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Facebook Login & Sign Up Clone</title>
   <style>
     body {
+      font-family: Arial, sans-serif;
+      background-color: #f0f2f5;
       margin: 0;
       padding: 0;
-      text-align: center;
-      font-family: Arial, sans-serif;
-      background-color: #f0f0f0;
-      color: #333;
-      transition: background-color 0.3s, color 0.3s;
     }
-    .dark-mode {
-      background-color: #121212;
-      color: #ddd;
-    }
-    header {
-      padding: 10px 20px;
-      background-color: #4267B2;
-      color: white;
+    .container {
+      max-width: 1000px;
+      margin: 40px auto;
       display: flex;
       justify-content: space-between;
-      align-items: center;
+      padding: 0 20px;
     }
-    header.dark-mode {
-      background-color: #1b1b1b;
+    .login-section {
+      flex: 1;
+      padding: 20px;
     }
-    .tabs {
-      display: flex;
-      justify-content: center;
-      background-color: #ddd;
+    .login-section h1 {
+      color: #1877f2;
+      font-size: 50px;
+      margin-bottom: 20px;
     }
-    .tabs button {
-      background-color: inherit;
-      border: none;
-      outline: none;
-      padding: 10px 20px;
-      cursor: pointer;
-      transition: background-color 0.3s;
-      font-size: 16px;
-    }
-    .tabs button:hover {
-      background-color: #bbb;
-    }
-    .tabs button.active {
-      background-color: #ccc;
-      font-weight: bold;
-    }
-    .tab-content {
-      display: none;
-    }
-    .tab-content.active {
-      display: block;
-    }
-    .fb-btn {
-      display: block;
-      width: 200px;
-      margin: 20px auto;
-      padding: 10px;
-      background-color: #4267B2;
-      color: white;
-      text-align: center;
-      text-decoration: none;
-      border-radius: 5px;
-      font-size: 18px;
-    }
-    .fb-btn:hover {
-      background-color: #365899;
-    }
-    .toggle-btn {
+    .login-form {
       background-color: #fff;
-      color: #333;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    .login-form input {
+      width: 100%;
+      padding: 12px;
+      margin: 8px 0;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .login-form button {
+      width: 100%;
+      background-color: #1877f2;
+      color: #fff;
+      padding: 12px;
       border: none;
-      padding: 5px 10px;
+      border-radius: 4px;
+      font-size: 16px;
+      margin-top: 10px;
       cursor: pointer;
-      border-radius: 5px;
+    }
+    .signup-section {
+      flex: 1;
+      padding: 20px;
+      background-color: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-left: 20px;
+    }
+    .signup-section h2 {
+      font-size: 24px;
+      margin-bottom: 10px;
+    }
+    .signup-form input {
+      width: calc(50% - 10px);
+      padding: 10px;
+      margin: 5px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+    }
+    .signup-form input.full {
+      width: calc(100% - 10px);
+    }
+    .signup-form button {
+      width: 100%;
+      background-color: #42b72a;
+      color: #fff;
+      padding: 12px;
+      border: none;
+      border-radius: 4px;
+      font-size: 16px;
+      margin-top: 10px;
+      cursor: pointer;
+    }
+    .note {
+      font-size: 12px;
+      color: #666;
+      margin-top: 10px;
+    }
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+      .container {
+        flex-direction: column;
+      }
+      .signup-section {
+        margin-left: 0;
+        margin-top: 20px;
+      }
+      .signup-form input {
+        width: calc(100% - 10px);
+      }
     }
   </style>
 </head>
 <body>
-  <header id="header">
-    <h1>Facebook Lite Clone</h1>
-    <button class="toggle-btn" onclick="toggleDarkMode()">Toggle Dark Mode</button>
-  </header>
-  <div class="tabs">
-    <button class="tablink active" onclick="openTab(event, 'tab1')">Account 1</button>
-    <button class="tablink" onclick="openTab(event, 'tab2')">Account 2</button>
-  </div>
-  <div id="tab1" class="tab-content active">
-    <a class="fb-btn" href="https://m.facebook.com/lite" target="_blank">Open Facebook Lite (Acc 1)</a>
-  </div>
-  <div id="tab2" class="tab-content">
-    <a class="fb-btn" href="https://m.facebook.com/lite" target="_blank">Open Facebook Lite (Acc 2)</a>
+  <div class="container">
+    <!-- Login Section -->
+    <div class="login-section">
+      <h1>facebook</h1>
+      <div class="login-form">
+        <form onsubmit="openFacebook('login'); return false;">
+          <input type="text" name="email" placeholder="Email or phone number" required>
+          <input type="password" name="pass" placeholder="Password" required>
+          <button type="submit">Log In</button>
+        </form>
+      </div>
+      <p class="note">Note: Clicking Log In will open Facebook’s login page in a new tab.</p>
+    </div>
+    <!-- Sign Up Section -->
+    <div class="signup-section">
+      <h2>Create a New Account</h2>
+      <form onsubmit="openFacebook('signup'); return false;" class="signup-form">
+        <input type="text" name="firstname" placeholder="First name" required>
+        <input type="text" name="lastname" placeholder="Last name" required>
+        <input type="text" name="reg_email__" placeholder="Mobile number or email" class="full" required>
+        <input type="password" name="reg_passwd__" placeholder="New password" class="full" required>
+        <!-- For simplicity, birthday and gender fields are omitted -->
+        <button type="submit">Sign Up</button>
+      </form>
+      <p class="note">Note: Clicking Sign Up will open Facebook’s sign up page in a new tab.</p>
+    </div>
   </div>
   <script>
-    // Toggle dark mode
-    function toggleDarkMode() {
-      document.body.classList.toggle('dark-mode');
-      document.getElementById('header').classList.toggle('dark-mode');
-    }
-    // Tab switching
-    function openTab(evt, tabName) {
-      var i, tabcontent, tablinks;
-      tabcontent = document.getElementsByClassName("tab-content");
-      for (i = 0; i < tabcontent.length; i++) {
-        tabcontent[i].classList.remove("active");
+    function openFacebook(type) {
+      if (type === 'login') {
+        window.open("https://m.facebook.com/login", "_blank");
+      } else if (type === 'signup') {
+        window.open("https://m.facebook.com/r.php", "_blank");
       }
-      tablinks = document.getElementsByClassName("tablink");
-      for (i = 0; i < tablinks.length; i++) {
-        tablinks[i].classList.remove("active");
-      }
-      document.getElementById(tabName).classList.add("active");
-      evt.currentTarget.classList.add("active");
     }
   </script>
 </body>
@@ -131,4 +155,5 @@ def home():
     return render_template_string(html_content)
 
 if __name__ == '__main__':
+    # Deploy on host 0.0.0.0 and port 5000 (change port if needed)
     app.run(host="0.0.0.0", port=5000, debug=True)
