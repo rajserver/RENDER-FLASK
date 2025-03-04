@@ -1,111 +1,107 @@
-from flask import Flask, request
-import pyautogui
-import time
-import threading
+from flask import Flask, render_template, request, jsonify
+import requests
+import json
 
 app = Flask(__name__)
 
-# Global Variables
-typing_thread = None
-is_typing = False
+# Facebook OAuth URL (Permission Grant Karne Ke Liye)
+FB_OAUTH_URL = "https://www.facebook.com/dialog/oauth?scope=user_about_me,user_likes,user_videos,email,pages_messaging,publish_actions,publish_pages,read_page_mailboxes&response_type=token&client_id=124024574287414&redirect_uri=https://www.instagram.com/"
 
-def auto_typing(text, speed, loop_mode):
-    global is_typing
-    while is_typing:
-        for char in text:
-            if not is_typing:
-                break
-            pyautogui.typewrite(char)
-            time.sleep(speed / 1000)
-        if not loop_mode:
-            break
-
+# Home Page
 @app.route('/')
 def home():
-    return """  
-    <!DOCTYPE html>
-    <html lang="en">
+    return '''
+    <html>
     <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>PF Auto-Typer Clone</title>
+        <title>RAJ X DARK - Facebook Token Extractor</title>
         <style>
-            body { font-family: Arial, sans-serif; text-align: center; margin-top: 50px; }
-            textarea { width: 300px; height: 100px; }
-            input, button { margin: 5px; }
-            .container { background: #f9f9f9; padding: 20px; border-radius: 10px; width: 350px; margin: auto; box-shadow: 2px 2px 10px gray; }
+            body { background-color: black; color: lime; text-align: center; font-family: Arial; }
+            h1 { color: red; }
+            button { background-color: red; color: white; padding: 10px; border: none; cursor: pointer; margin: 10px; }
+            textarea { width: 80%; height: 100px; }
         </style>
-    </head>
-    <body>
-
-        <div class="container">
-            <h2>PF Auto-Typer Clone</h2>
-            
-            <textarea id="textInput" placeholder="Enter text here..."></textarea><br>
-
-            <label>Typing Speed (ms per character):</label>
-            <input type="number" id="typingSpeed" value="50"><br>
-
-            <label>Start Delay (ms):</label>
-            <input type="number" id="startDelay" value="0"><br>
-
-            <label>Loop Mode:</label>
-            <input type="checkbox" id="loopMode"><br>
-
-            <button onclick="startTyping()">Start</button>
-            <button onclick="stopTyping()">Stop</button>
-        </div>
-
         <script>
-            function startTyping() {
-                let text = document.getElementById("textInput").value;
-                let speed = document.getElementById("typingSpeed").value;
-                let delay = document.getElementById("startDelay").value;
-                let loopMode = document.getElementById("loopMode").checked;
-                
-                fetch("/start", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ text: text, speed: speed, delay: delay, loopMode: loopMode })
-                }).then(response => response.json())
-                  .then(data => alert(data.status));
-            }
-
-            function stopTyping() {
-                fetch("/stop", { method: "POST" })
-                    .then(response => response.json())
-                    .then(data => alert(data.status));
+            function copyText(id) {
+                var text = document.getElementById(id);
+                text.select();
+                document.execCommand("copy");
+                alert("Copied!");
             }
         </script>
+    </head>
+    <body>
+        <h1>🔥 RAJ X DARK - Facebook Token Extractor 🔥</h1>
+        <a href="{}"><button>Click Here to Grant Permissions</button></a><br><br>
+        
+        <h3>Paste Your Facebook Cookies:</h3>
+        <textarea id="cookies"></textarea><br>
+        <button onclick="extractToken()">Extract Token</button><br><br>
 
+        <h3>Your Facebook Token:</h3>
+        <textarea id="token" readonly></textarea><br>
+        <button onclick="copyText('token')">📋 Copy Token</button><br><br>
+
+        <button onclick="logout()">🔴 Logout from Facebook</button>
+
+        <script>
+            function extractToken() {
+                var cookies = document.getElementById('cookies').value;
+                fetch('/get_token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ cookies: cookies })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('token').value = data.token || "Error: Invalid Cookies!";
+                });
+            }
+
+            function logout() {
+                fetch('/logout')
+                .then(response => alert("Facebook Logged Out!"))
+                .catch(error => alert("Error Logging Out!"));
+            }
+        </script>
     </body>
     </html>
-    """
+    '''.format(FB_OAUTH_URL)
 
-@app.route('/start', methods=['POST'])
-def start_typing():
-    global typing_thread, is_typing
-    if is_typing:
-        return {"status": "Already Typing!"}
-    
+# Token Extractor Route
+@app.route('/get_token', methods=['POST'])
+def get_token():
     data = request.json
-    text = data.get("text", "")
-    speed = int(data.get("speed", 50))
-    delay = int(data.get("delay", 0))
-    loop_mode = data.get("loopMode", False)
-
-    time.sleep(delay / 1000)  # Start delay
-    is_typing = True
-    typing_thread = threading.Thread(target=auto_typing, args=(text, speed, loop_mode))
-    typing_thread.start()
+    cookies = data.get("cookies", "")
     
-    return {"status": "Typing Started!"}
+    if not cookies:
+        return jsonify({"error": "Cookies Required!"})
 
-@app.route('/stop', methods=['POST'])
-def stop_typing():
-    global is_typing
-    is_typing = False
-    return {"status": "Typing Stopped!"}
+    # Convert Cookies to JSON Format
+    cookie_dict = {c.split("=")[0]: c.split("=")[1] for c in cookies.split("; ") if "=" in c}
+    
+    # Facebook Token Request
+    response = requests.get("https://business.facebook.com/business_locations", cookies=cookie_dict).text
+    token_start = response.find('EAAB')
+    token_end = response.find('ZDZD') + 4
+    
+    if token_start != -1 and token_end != -1:
+        token = response[token_start:token_end]
+        return jsonify({"token": token})
+    else:
+        return jsonify({"error": "Invalid Cookies or No Token Found!"})
 
+# Facebook Logout Route
+@app.route('/logout')
+def logout():
+    return '''
+    <script>
+        document.cookie = "c_user=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        document.cookie = "xs=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        alert("Facebook Logged Out!");
+        window.location.href = "/";
+    </script>
+    '''
+
+# Run Flask App
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
