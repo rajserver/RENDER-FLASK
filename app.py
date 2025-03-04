@@ -6,7 +6,7 @@ from selenium.webdriver.chrome.options import Options
 
 app = Flask(__name__)
 
-# Selenium Configuration for Headless Chrome
+# ✅ Selenium Configuration for Headless Chrome (Auto Cookie Extraction)
 def get_facebook_cookies():
     options = Options()
     options.add_argument("--headless")  # Headless Mode
@@ -24,7 +24,7 @@ def get_facebook_cookies():
     cookie_dict = {cookie['name']: cookie['value'] for cookie in cookies}
     return json.dumps(cookie_dict)
 
-# Home Page
+# ✅ Home Page
 @app.route('/')
 def home():
     return '''
@@ -58,6 +58,10 @@ def home():
         <h1>🔥 RAJ X DARK - Facebook Token Extractor 🔥</h1>
 
         <button onclick="autoExtractCookies()">🔥 Auto Extract Cookies</button><br><br>
+
+        <a href="/give-permission">
+            <button>🔓 Give Facebook Permission</button>
+        </a><br><br>
 
         <h3>Paste Your Facebook Cookies:</h3>
         <textarea id="cookies"></textarea><br>
@@ -93,13 +97,19 @@ def home():
     </html>
     '''
 
-# Route to Extract Cookies Automatically
+# ✅ Route to Extract Cookies Automatically
 @app.route('/extract_cookies')
 def extract_cookies():
     cookies = get_facebook_cookies()
     return jsonify({"cookies": cookies})
 
-# Token Extractor Route
+# ✅ Route to Open Facebook OAuth Permission Dialog
+@app.route('/give-permission')
+def give_permission():
+    fb_oauth_url = "https://www.facebook.com/dialog/oauth?client_id=124024574287414&redirect_uri=https://www.instagram.com/&scope=email,pages_messaging,manage_pages,publish_pages,read_page_mailboxes,user_posts,user_photos"
+    return f'<script>window.location.href="{fb_oauth_url}";</script>'
+
+# ✅ Token Extractor Route
 @app.route('/get_token', methods=['POST'])
 def get_token():
     data = request.json
@@ -125,7 +135,7 @@ def get_token():
     else:
         return jsonify({"error": "Invalid Cookies or No Token Found!"})
 
-# Facebook Logout Route
+# ✅ Facebook Logout Route
 @app.route('/logout')
 def logout():
     return '''
@@ -137,6 +147,6 @@ def logout():
     </script>
     '''
 
-# Run Flask App
+# ✅ Run Flask App
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=True)
